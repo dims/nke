@@ -76,7 +76,7 @@ COPY ./controller/ui /ui
 #
 # THIRD_PARTY_NOTICES.md is deliberately absent. The root file is an index that
 # states it does not cover controller/, so shipping it here would assert
-# attribution this image does not have. That gap is TODO item 44.
+# attribution this image does not have.
 COPY LICENSE NOTICE /licenses/
 
 ## https://github.com/opencontainers/image-spec/blob/main/annotations.md
