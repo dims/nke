@@ -7,6 +7,11 @@
 #
 # See docs/go-workspace.md.
 
+# The docs teach `GOWORK=off` for the modules outside the workspace. Inherited
+# here it would make every workspace target fail with "no go.work file found",
+# so it is dropped from the environment the recipes pass on.
+unexport GOWORK
+
 GO      ?= go
 BIN_DIR ?= $(CURDIR)/bin
 
@@ -43,10 +48,21 @@ help: ## Show the available targets.
 	@awk 'BEGIN { FS = ":.*## " } /^[a-z][a-z-]*:.*## / { printf "  %-12s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 	@echo
 
-work: ## Create go.work if absent and list every public module in it.
+work: ## Reset go.work to exactly the public modules, creating it if absent.
 	@test -f go.work || $(GO) work init
+	@# `go work use` only ever adds, so on its own this could not undo
+	@# `make work-full` -- it left seven modules listed and still reported five.
+	@for d in $$($(GO) work edit -json | grep -o '"DiskPath": "[^"]*"' | cut -d'"' -f4); do \
+		case " $(addprefix ./,$(WORK_MODULES)) " in \
+			*" $$d "*) ;; \
+			*) $(GO) work edit -dropuse $$d ;; \
+		esac; \
+	done
+	@for o in $$($(GO) work edit -json | grep -A1 '"Old"' | grep -o '"Path": "[^"]*"' | cut -d'"' -f4); do \
+		$(GO) work edit -dropreplace $$o; \
+	done
 	@$(GO) work use $(addprefix ./,$(WORK_MODULES))
-	@echo "go.work lists $(words $(WORK_MODULES)) modules."
+	@echo "go.work lists $$($(GO) work edit -json | grep -c '"DiskPath"') modules."
 
 work-sync: work ## Refresh go.work.sum and the modules' go.mod and go.sum.
 	@# A workspace builds every member against one unified version of each
@@ -62,6 +78,10 @@ work-sync: work ## Refresh go.work.sum and the modules' go.mod and go.sum.
 	@for m in $(WORK_MODULES); do \
 		(cd $$m && GOWORK=off $(GO) mod tidy) || exit 1; \
 	done
+	@# Deleted first: `go mod download all` only adds hashes, so without this
+	@# go.work.sum accumulates entries for versions nothing references any more
+	@# and stops being a function of the modules it describes.
+	@rm -f go.work.sum
 	@$(GO) mod download all
 	@echo "Workspace refreshed. Commit go.work, go.work.sum and every go.mod and"
 	@echo "go.sum this changed, together."
@@ -110,6 +130,7 @@ work-check: ## Verify go.work and go.work.sum are complete and current.
 	@for m in $(WORK_MODULES); do \
 		(cd $$m && GOWORK=off $(GO) mod tidy) || exit 1; \
 	done
+	@rm -f go.work.sum
 	@$(GO) mod download all
 	@# go.mod and go.sum are in the diff on purpose. The failure this catches is
 	@# a dependency bump landing in one module without the workspace being
@@ -119,7 +140,14 @@ work-check: ## Verify go.work and go.work.sum are complete and current.
 		|| { echo "ERROR: the workspace is stale. Run 'make work-sync' and commit every file it changes."; exit 1; }
 	@echo "go.work and go.work.sum are up to date."
 
-build: ## Build the released commands in the workspace into bin/.
+build: ## Build every workspace package, and the released commands into bin/.
+	@# Compile everything first. Building only ./cmd/... left controller/api and
+	@# controller/test/e2e with no compile coverage anywhere in CI, and this
+	@# change re-versioned both of them.
+	@for m in $(WORK_MODULES); do \
+		echo "- checking $$m"; \
+		$(GO) build -C $$m ./... || exit 1; \
+	done
 	@mkdir -p $(BIN_DIR)
 	@for m in $(CMD_MODULES); do \
 		echo "- building $$m"; \
