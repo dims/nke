@@ -7,15 +7,6 @@
 # disclosure or distribution of this material and related documentation
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
-
-
-# This module is not in the repository's root go.work, because it requires
-# gitlab-master.nvidia.com and a workspace resolves one build list across every
-# member. GOWORK is on by default, so without this every `go` command run here
-# fails with "directory ... is contained in a module that is not one of the
-# workspace modules listed in go.work". See docs/go-workspace.md.
-export GOWORK := off
-
 WORKER_BIN_NAME			?= cloud-workflow-engine
 TEMPORAL_CLI_DOWNLOAD_DIR	?= $(CURDIR)/.go/temporal-cli
 CWE_GOFAIL_E2E_WORKER_BINARY	?= $(CURDIR)/.go/bin/cwe-worker-gofail
@@ -166,31 +157,20 @@ e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
 	'
 
 
-ifdef CI
-  # To download go mods from our private gitlab repo we use a netrc file to store the git credentials
-  # See: https://www.gnu.org/software/inetutils/manual/html_node/The-_002enetrc-file.html
-  # In CI this file is created see recipe below.
-  DOCKER_BUILD_SECRET := --secret id=gitcreds,src=../netrc.txt
-else
-  # For local docker build we pass the netrc value using an ENV variable.
-  # So: export GIT_CREDENTIALS_NETRC="machine gitlab-master.nvidia.com login oathtoken password ${GITLAB_TOKEN}"
-  # Where GITLAB_TOKEN="oauthtoken:my-personal-access-token"
-  DOCKER_BUILD_SECRET := --secret id=gitcreds,env=GIT_CREDENTIALS_NETRC
-endif
-
 .PHONY: docker-build-local
 docker-build-local: ## Build the docker image for Cloud Workflow Engine
+	@# The build context is the repository root: the controller is a member of
+	@# the root Go workspace, and the image build needs go.work, the committed
+	@# vendor/ tree, and the sibling modules. Every dependency comes from
+	@# vendor/, so the build needs no git credentials.
 	DOCKER_BUILDKIT=1 docker build -f Dockerfile --platform linux/amd64 \
 	  --progress=plain \
-	  --build-context agentsrc=../agent \
-	  $(DOCKER_BUILD_SECRET) \
 	  --tag $(IMG_NAME):$(GIT_VERSION) \
 	  --tag $(IMG_NAME):$(BUILD_VERSION) \
 	  --tag $(IMG) \
 	  --build-arg BUILD_VERSION=${BUILD_VERSION} \
 	  --build-arg GIT_VERSION=${GIT_VERSION} \
-	  --build-arg GIT_CREDENTIALS=${GIT_CREDENTIALS} \
-	  .
+	  ..
 
 ##@ Run
 
