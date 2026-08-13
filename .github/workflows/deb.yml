@@ -20,10 +20,24 @@
 # exercised on every change to agent/, in the same way Go Build exercises the
 # compile path -- see the header of go-build.yml for the same reasoning.
 #
-# ubuntu-latest with `pull_request`, deliberately: dpkg-deb and fakeroot are
-# Debian tooling and the agent builds from public dependencies, so this needs no
-# NVIDIA runner and no credentials, and therefore also covers fork and
-# Dependabot pull requests.
+# Each architecture is built on a runner of that architecture -- amd64 on
+# ubuntu-24.04, arm64 on ubuntu-24.04-arm -- rather than cross-compiling both on
+# one machine. That is not for speed. Cross-compiling silently sets
+# CGO_ENABLED=0, because there is no C toolchain for the target, so the two
+# packages came out different: the native amd64 build was dynamically linked
+# against libc and the cross-built arm64 one was static, while both carried the
+# same `Depends: libc6`. True for one, false for the other, and chosen by
+# nobody.
+#
+# Building each natively removes the asymmetry at its source: CGO is enabled for
+# both, both link against libc, and `Depends: libc6` is correct for both.
+#
+# GitHub-hosted runners, not the self-hosted linux-*-cpu16 pool, deliberately.
+# Self-hosted runners do not receive pull_request events -- see the header of
+# lint.yml -- so using them would cost coverage of fork and Dependabot pull
+# requests, which is most of the reason this workflow exists. dpkg-deb and
+# fakeroot are ordinary Debian tooling and the agent builds from public
+# dependencies, so no NVIDIA runner and no credentials are needed.
 
 name: Debian Package
 
@@ -58,12 +72,20 @@ concurrency:
 
 jobs:
   deb:
-    name: Build the Debian packages
-    runs-on: ubuntu-latest
+    name: Build the ${{ matrix.arch }} package
+    runs-on: ${{ matrix.runner }}
     if: github.repository == 'NVIDIA/nke'
     timeout-minutes: 20
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -101,9 +123,12 @@ jobs:
           sudo apt-get install -y -qq fakeroot dpkg-dev
           dpkg-deb --version | head -1
 
-      - name: Build the packages
+      - name: Build the package
         working-directory: agent
-        run: make deb-all
+        # deb-$(arch), not deb-all: this runner is that architecture, so the
+        # build is native and CGO stays on. Building both here would put us back
+        # to cross-compiling one of them.
+        run: make deb-${{ matrix.arch }}
 
       # The build succeeding is not the assertion. dpkg-deb will happily produce
       # a package that installs nothing, so this checks what is actually inside.
@@ -113,78 +138,87 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           debs=(bin/*.deb)
-          if [ ${#debs[@]} -eq 0 ]; then
-            echo "::error::make deb-all produced no .deb at all"
-            exit 1
-          fi
-          if [ ${#debs[@]} -ne 2 ]; then
-            echo "::error::expected 2 packages (amd64 and arm64), found ${#debs[@]}:"
+          if [ ${#debs[@]} -ne 1 ]; then
+            echo "::error::expected exactly 1 package from 'make deb-${{ matrix.arch }}', found ${#debs[@]}"
             printf '    %s\n' "${debs[@]}"
             exit 1
           fi
+          deb="${debs[0]}"
 
-          seen_arches=""
-          for deb in "${debs[@]}"; do
-            echo "::group::${deb}"
-            dpkg-deb -I "$deb"
-            dpkg-deb -c "$deb"
-            echo "::endgroup::"
+          echo "::group::${deb}"
+          dpkg-deb -I "$deb"
+          dpkg-deb -c "$deb"
+          echo "::endgroup::"
 
-            pkg=$(dpkg-deb -f "$deb" Package)
-            ver=$(dpkg-deb -f "$deb" Version)
-            arch=$(dpkg-deb -f "$deb" Architecture)
+          pkg=$(dpkg-deb -f "$deb" Package)
+          ver=$(dpkg-deb -f "$deb" Version)
+          arch=$(dpkg-deb -f "$deb" Architecture)
 
-            [ "$pkg" = "nke-agent" ] \
-              || { echo "::error::${deb}: Package is '${pkg}', expected 'nke-agent'"; exit 1; }
+          [ "$pkg" = "nke-agent" ] \
+            || { echo "::error::${deb}: Package is '${pkg}', expected 'nke-agent'"; exit 1; }
 
-            # The regression guard for the bug this workflow was written after.
-            # dpkg itself rejects this at build time, but asserting it here names
-            # the cause instead of leaving a parser error to be decoded.
-            case "$ver" in
-              [0-9]*) ;;
-              *) echo "::error::${deb}: Version '${ver}' does not start with a digit; dpkg will reject it. DEB_VERSION derives from 'git describe --match agent/v*'."; exit 1 ;;
-            esac
+          # The regression guard for the bug this workflow was written after.
+          # dpkg itself rejects this at build time, but asserting it here names
+          # the cause instead of leaving a parser error to be decoded.
+          case "$ver" in
+            [0-9]*) ;;
+            *) echo "::error::${deb}: Version '${ver}' does not start with a digit; dpkg will reject it. DEB_VERSION derives from 'git describe --match agent/v*'."; exit 1 ;;
+          esac
 
-            case "$arch" in
-              amd64|arm64) ;;
-              *) echo "::error::${deb}: unexpected Architecture '${arch}'"; exit 1 ;;
-            esac
-            case "$seen_arches" in
-              *"$arch"*) echo "::error::two packages built for the same architecture '${arch}'"; exit 1 ;;
-            esac
-            seen_arches="${seen_arches} ${arch}"
+          # The package must be for the architecture this runner is. Building on
+          # the wrong runner, or a matrix entry drifting, would otherwise produce
+          # a silently cross-compiled package -- which is the asymmetry this
+          # workflow's per-arch runners exist to prevent.
+          [ "$arch" = "${{ matrix.arch }}" ] \
+            || { echo "::error::${deb}: Architecture is '${arch}', expected '${{ matrix.arch }}'"; exit 1; }
 
-            # A package that ships no binary would otherwise pass everything
-            # above. The systemd unit matters for the same reason: the agent is
-            # installed as a service, so an empty unit directory is a broken
-            # install that still produces a valid .deb.
-            contents=$(dpkg-deb -c "$deb")
-            printf '%s\n' "$contents" | grep -q './usr/local/bin/nke-agent' \
-              || { echo "::error::${deb}: does not contain /usr/local/bin/nke-agent"; exit 1; }
-            printf '%s\n' "$contents" | grep -q './etc/systemd/system/.*\.service' \
-              || { echo "::error::${deb}: contains no systemd unit"; exit 1; }
+          # A package that ships no binary would otherwise pass everything above.
+          # The systemd unit matters for the same reason: the agent is installed
+          # as a service, so an empty unit directory is a broken install that
+          # still produces a valid .deb.
+          contents=$(dpkg-deb -c "$deb")
+          printf '%s\n' "$contents" | grep -q './usr/local/bin/nke-agent' \
+            || { echo "::error::${deb}: does not contain /usr/local/bin/nke-agent"; exit 1; }
+          printf '%s\n' "$contents" | grep -q './etc/systemd/system/.*\.service' \
+            || { echo "::error::${deb}: contains no systemd unit"; exit 1; }
 
-            echo "OK  ${deb}  package=${pkg} version=${ver} arch=${arch}"
-          done
+          # The point of building natively. A cross-compiled Go binary has CGO
+          # disabled and comes out static, which would make the Depends: libc6
+          # in the control file false. Asserting it keeps the two architectures
+          # honest with each other rather than trusting the runner label.
+          dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/local/bin/nke-agent > /tmp/nke-agent
+          linkage=$(file -b /tmp/nke-agent)
+          echo "  linkage: ${linkage}"
+          case "$linkage" in
+            *"dynamically linked"*) ;;
+            *) echo "::error::${deb}: the binary is not dynamically linked, so this build was not native and 'Depends: libc6' is wrong for it: ${linkage}"; exit 1 ;;
+          esac
+
+          echo "OK  ${deb}  package=${pkg} version=${ver} arch=${arch}"
 
       - name: Summarise
         if: always()
         working-directory: agent
         run: |
           {
-            echo "## Debian packages"
+            echo "### ${{ matrix.arch }} on ${{ matrix.runner }}"
             echo
             if compgen -G 'bin/*.deb' > /dev/null; then
-              echo '| Package | Version | Arch | Size |'
-              echo '|---|---|---|---|'
+              echo '| Package | Version | Arch | Size | Linkage |'
+              echo '|---|---|---|---|---|'
               for deb in bin/*.deb; do
-                printf '| %s | %s | %s | %s |\n' \
+                link='?'
+                if dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/local/bin/nke-agent > /tmp/s 2>/dev/null; then
+                  link=$(file -b /tmp/s | grep -oE 'statically linked|dynamically linked' || echo '?')
+                fi
+                printf '| %s | %s | %s | %s | %s |\n' \
                   "$(dpkg-deb -f "$deb" Package)" \
                   "$(dpkg-deb -f "$deb" Version)" \
                   "$(dpkg-deb -f "$deb" Architecture)" \
-                  "$(du -h "$deb" | cut -f1)"
+                  "$(du -h "$deb" | cut -f1)" \
+                  "$link"
               done
             else
-              echo 'No packages were produced.'
+              echo 'No package was produced.'
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
