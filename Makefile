@@ -40,7 +40,7 @@ CARBIDE_SDK      := gitlab-master.nvidia.com/nvmetal/cloud-api-sdk-go
 CARBIDE_OVERRIDE := gitlab-master.nvidia.com/nvmetal/carbide-rest-ngc-sdk-go@v0.0.14
 
 .DEFAULT_GOAL := help
-.PHONY: help work work-sync work-check work-full build clean
+.PHONY: help work work-sync work-check work-full vendor build clean
 
 help: ## Show the available targets.
 	@echo "Usage: make <target>"
@@ -83,8 +83,13 @@ work-sync: work ## Refresh go.work.sum and the modules' go.mod and go.sum.
 	@# and stops being a function of the modules it describes.
 	@rm -f go.work.sum
 	@$(GO) mod download all
-	@echo "Workspace refreshed. Commit go.work, go.work.sum and every go.mod and"
-	@echo "go.sum this changed, together."
+	@# vendor/ has to move with the requirements it mirrors. It does not rot
+	@# quietly -- the go command compares vendor/modules.txt against the go.mod
+	@# files and refuses to build with "inconsistent vendoring" -- but that
+	@# failure lands on whoever pulls next, not on whoever bumped.
+	@$(GO) work vendor
+	@echo "Workspace refreshed. Commit go.work, go.work.sum, vendor/ and every"
+	@echo "go.mod and go.sum this changed, together."
 
 work-check: ## Verify go.work and go.work.sum are complete and current.
 	@# git diff reports nothing for an untracked path, so an uncommitted
@@ -132,13 +137,24 @@ work-check: ## Verify go.work and go.work.sum are complete and current.
 	done
 	@rm -f go.work.sum
 	@$(GO) mod download all
-	@# go.mod and go.sum are in the diff on purpose. The failure this catches is
-	@# a dependency bump landing in one module without the workspace being
-	@# refreshed: the other modules then build against a version none of their
-	@# go.mod files admits to.
-	@git diff --exit-code -- go.work go.work.sum '*/go.mod' '*/go.sum' \
+	@$(GO) work vendor
+	@# go.mod, go.sum and vendor/ are in the diff on purpose. The failure this
+	@# catches is a dependency bump landing in one module without the workspace
+	@# being refreshed: the other modules then build against a version none of
+	@# their go.mod files admits to, and vendor/ still holds the old source.
+	@git diff --exit-code -- go.work go.work.sum vendor '*/go.mod' '*/go.sum' \
 		|| { echo "ERROR: the workspace is stale. Run 'make work-sync' and commit every file it changes."; exit 1; }
-	@echo "go.work and go.work.sum are up to date."
+	@# vendor/ is the one place an untracked file is invisible to git diff and
+	@# still changes the build, so check for stragglers explicitly.
+	@[ -z "$$(git status --porcelain -- vendor)" ] \
+		|| { echo "ERROR: vendor/ has untracked or ignored changes:"; git status --porcelain -- vendor | sed 's/^/    /'; exit 1; }
+	@echo "go.work, go.work.sum and vendor/ are up to date."
+
+vendor: work ## Refresh vendor/ alone, without touching go.mod or go.sum.
+	@# `work-sync` also does this, but it rewrites requirements on the way. Use
+	@# this when the requirements are already right and only vendor/ has drifted.
+	@$(GO) work vendor
+	@echo "vendor/ now mirrors $$(grep -c '^# ' vendor/modules.txt) modules."
 
 build: ## Build every workspace package, and the released commands into bin/.
 	@# Compile everything first. Building only ./cmd/... left controller/api and

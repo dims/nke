@@ -4,7 +4,42 @@ This repository holds seven Go modules. `go.work` at the root ties together the
 five that build from public dependencies, so one `make build` covers all of
 them and one Go toolchain version applies across the tree.
 
-`go.work` and `go.work.sum` are **committed**, and CI fails when they go stale.
+`go.work`, `go.work.sum` and `vendor/` are **committed**, and CI fails when any
+of them goes stale.
+
+## Vendoring
+
+`vendor/` at the repository root holds the source of every dependency of the
+five workspace modules — **97 modules**, written by `go work vendor`. Builds read
+it instead of the network, so they are reproducible and need no proxy:
+
+```bash
+GOPROXY=off go build ./cmd/...    # builds, entirely from vendor/
+```
+
+**It covers the workspace only.** `controller/` and `controller/forge-vms` are
+not members, so `go work vendor` writes nothing for them and they resolve from
+the module cache exactly as before.
+
+You do not opt in to it. With `vendor/` present and consistent, the go command
+selects `-mod=vendor` by itself. If it disagrees with the `go.mod` files, the go
+command refuses to build rather than quietly falling back to the network:
+
+```
+go: inconsistent vendoring in /path/to/nke
+	<module>: is explicitly required in go.mod, but not marked as explicit in vendor/modules.txt
+```
+
+That message means a requirement changed without re-vendoring. `make work-sync`
+fixes it as part of a full refresh; `make vendor` fixes only `vendor/`, leaving
+`go.mod` and `go.sum` alone.
+
+⚠️ **`vendor/` does not reach the notices file.** `hack/generate-notices.sh`
+sets `GOWORK=off`, so it resolves from the module cache and never reads this
+tree. That is deliberate: with a vendor directory in scope, `go-licenses`
+attributes every dependency to this repository instead of upstream. Verified —
+`THIRD_PARTY_NOTICES.md` is byte-identical with and without `vendor/`, and
+carries zero self-attributed URLs.
 
 ## What is in the workspace
 
@@ -49,6 +84,7 @@ dependencies.
 ```bash
 make            # list the targets
 make build      # build the released commands into bin/
+make vendor     # refresh vendor/ only
 make clean      # remove bin/
 ```
 
@@ -67,7 +103,7 @@ After any change to a `go.mod` or `go.sum`:
 make work-sync
 ```
 
-That does three things:
+That does four things:
 
 1. `go work sync` writes the workspace's selected version of each dependency
    back into every member's `go.mod`.
@@ -76,9 +112,10 @@ That does three things:
    module unbuildable on its own — and these modules are built on their own, by
    their own Makefiles, by the image builds, and by every per-module CI job.
 3. `go mod download all` rewrites `go.work.sum`.
+4. `go work vendor` rewrites `vendor/`.
 
-**Commit `go.work`, `go.work.sum` and every `go.mod` and `go.sum` it touched, in
-the same commit as the change that moved them.**
+**Commit `go.work`, `go.work.sum`, `vendor/` and every `go.mod` and `go.sum` it
+touched, in the same commit as the change that moved them.**
 
 ### Why `go.mod` changes too
 
@@ -100,7 +137,7 @@ review it and commit it.
 
 ## What CI enforces
 
-The **Go Workspace Check** workflow runs `make work-check`, which asserts five
+The **Go Workspace Check** workflow runs `make work-check`, which asserts six
 things. Each maps to a failure this repository can produce:
 
 | Assertion | Failure it catches | Fix |
@@ -110,6 +147,7 @@ things. Each maps to a failure this repository can produce:
 | `go.work` carries no `replace` | `make work-full` output committed by accident. It repoints a dependency for every module while the module list still looks correct. | `make work`, or `git checkout -- go.work go.work.sum '*/go.mod' '*/go.sum'` |
 | Every `go.mod` in the tree is classified in the `Makefile` | A **new module** added to neither `WORK_MODULES` nor `PRIVATE_MODULES`. It would never be built or synced, and nothing else in CI would mention it. | add it to the right list in the `Makefile`, then `make work-sync` |
 | A full refresh changes nothing | The ordinary stale case: a bump landed in one module, so the others build against a version none of their `go.mod` files admits to | `make work-sync` and commit everything it changes |
+| `vendor/` has no untracked files | A vendored file added but never `git add`ed. `git diff` cannot see an untracked path, so the row above would pass while the build read a file nobody reviewed. | `git add vendor` |
 
 The **Go Build** workflow runs `make build`. Both run on `ubuntu-latest` and
 need no NVIDIA credentials, so they also run on fork and Dependabot pull
@@ -121,7 +159,8 @@ requests.
 2. Add its path to `WORK_MODULES` in the root `Makefile` — or to
    `PRIVATE_MODULES` if it needs `gitlab-master.nvidia.com`.
 3. If it has commands to build, add it to `CMD_MODULES` too.
-4. Run `make work-sync` and commit `go.work`, `go.work.sum` and the `Makefile`.
+4. Run `make work-sync` and commit `go.work`, `go.work.sum`, `vendor/` and the
+   `Makefile`.
 
 Skipping step 2 fails `make work-check` by design, with the module named.
 

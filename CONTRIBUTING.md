@@ -45,9 +45,15 @@ build from public dependencies. `controller/` and `controller/forge-vms` are not
 in the workspace — they need `gitlab-master.nvidia.com` — so build those from
 their own directories as below.
 
+Those five modules' dependencies are **vendored** into `vendor/` at the root, so
+a build reads no network at all — `GOPROXY=off make build` works. `controller/`
+is not vendored, for the same reason it is not in the workspace.
+
 ⚠️ **After changing any `go.mod` or `go.sum`, run `make work-sync` and commit
-`go.work` and `go.work.sum` with your change.** Nothing updates them for you,
-and CI fails on a stale workspace. See [`docs/go-workspace.md`](docs/go-workspace.md).
+`go.work`, `go.work.sum` and `vendor/` with your change.** Nothing updates them
+for you, and CI fails on a stale workspace. If a build stops with
+`go: inconsistent vendoring`, that is this — run `make vendor`. See
+[`docs/go-workspace.md`](docs/go-workspace.md).
 
 **Controller (cloud-workflow-engine):**
 

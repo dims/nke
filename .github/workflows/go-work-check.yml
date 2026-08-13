@@ -36,6 +36,7 @@ on:
       - '**/go.sum'
       - 'go.work'
       - 'go.work.sum'
+      - 'vendor/**'
       - 'Makefile'
       - '.github/workflows/go-work-check.yml'
   pull_request:
@@ -45,6 +46,7 @@ on:
       - '**/go.sum'
       - 'go.work'
       - 'go.work.sum'
+      - 'vendor/**'
       - 'Makefile'
       - '.github/workflows/go-work-check.yml'
   workflow_dispatch:
