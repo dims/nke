@@ -24,3 +24,12 @@ controller/hack/nico-mock/nico-mock
 # `make work-full` rewrites go.work to add the modules that need
 # gitlab-master.nvidia.com. That result is local-only -- undo it with
 # `git checkout -- go.work` rather than committing it.
+
+# vendor/ is written by `go work vendor` and must be committed exactly as the
+# tool produces it. Nothing above may filter it: the editor patterns already
+# dropped one file, `santhosh-tekuri/jsonschema/v6/.swp`, which upstream
+# committed by accident and `go work vendor` faithfully copies. The result was
+# 6118 files on disk against 6117 tracked, with `git status` reporting clean --
+# a divergence no check could see, because git does not report ignored paths by
+# default. Keep this negation last so it wins.
+!vendor/**

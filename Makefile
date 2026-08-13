@@ -144,10 +144,13 @@ work-check: ## Verify go.work and go.work.sum are complete and current.
 	@# their go.mod files admits to, and vendor/ still holds the old source.
 	@git diff --exit-code -- go.work go.work.sum vendor '*/go.mod' '*/go.sum' \
 		|| { echo "ERROR: the workspace is stale. Run 'make work-sync' and commit every file it changes."; exit 1; }
-	@# vendor/ is the one place an untracked file is invisible to git diff and
-	@# still changes the build, so check for stragglers explicitly.
-	@[ -z "$$(git status --porcelain -- vendor)" ] \
-		|| { echo "ERROR: vendor/ has untracked or ignored changes:"; git status --porcelain -- vendor | sed 's/^/    /'; exit 1; }
+	@# --ignored matters here. git omits ignored paths by default, so a vendored
+	@# file caught by an editor pattern in .gitignore leaves the tree diverging
+	@# from what `go work vendor` writes while every other check reports clean.
+	@# That happened: `*.swp` silently dropped one file, 6118 on disk against
+	@# 6117 tracked.
+	@[ -z "$$(git status --porcelain --ignored -- vendor)" ] \
+		|| { echo "ERROR: vendor/ has untracked or ignored files. It must match 'go work vendor' exactly:"; git status --porcelain --ignored -- vendor | sed 's/^/    /'; exit 1; }
 	@echo "go.work, go.work.sum and vendor/ are up to date."
 
 vendor: work ## Refresh vendor/ alone, without touching go.mod or go.sum.
