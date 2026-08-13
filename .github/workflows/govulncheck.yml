@@ -78,7 +78,7 @@ jobs:
           # floor, not a pin, and setup-go pins GOTOOLCHAIN=local to whatever it
           # installs -- so reading go.mod scans the OLDEST Go the module allows,
           # which is a toolchain nobody ships. agent/Dockerfile.nke-builder
-          # builds the released agent with golang:1.26.5.
+          # builds the released agent with golang:1.26.6.
           #
           # That gap is not cosmetic. On 2026-08-13 the floor was go 1.26.0, and
           # scanning it reported 16 reachable standard-library vulnerabilities,

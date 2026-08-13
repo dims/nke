@@ -16,7 +16,7 @@ ARG BASE_REGISTRY=docker.io
 FROM ghcr.io/spiffe/k8s-spiffe-workload-jwt-exec-auth:0.2.0@sha256:cffed83b451236bad4347110f116e0808a132b57b799acd7c9d8a4ce7cf6b781 AS spiffe-jwt-exec-auth
 
 # Set up golang build container
-FROM ${BASE_REGISTRY}/golang:1.26.5 AS builder
+FROM ${BASE_REGISTRY}/golang:1.26.6 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
