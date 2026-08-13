@@ -1,17 +1,15 @@
 module github.com/NVIDIA/nke/controller/forge-vms
 
-go 1.24.4
-
-toolchain go1.24.5
+go 1.25.4
 
 require (
+	github.com/NVIDIA/ncx-infra-controller-rest v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/lmittmann/tint v1.1.3
 	github.com/osrg/gobgp/v3 v3.37.0
 	github.com/uptrace/bun v1.2.11
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.11
 	github.com/vishvananda/netlink v1.3.1
-	gitlab-master.nvidia.com/nvmetal/cloud-api-sdk-go v0.0.9
 	go.yaml.in/yaml/v4 v4.0.0-rc.3
 	golang.org/x/crypto v0.48.0
 	modernc.org/sqlite v1.40.1
@@ -34,5 +32,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-replace gitlab-master.nvidia.com/nvmetal/cloud-api-sdk-go => gitlab-master.nvidia.com/nvmetal/carbide-rest-ngc-sdk-go v0.0.9

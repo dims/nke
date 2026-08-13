@@ -15,6 +15,11 @@ ARG BASE_REGISTRY=docker.io
 
 FROM ghcr.io/spiffe/k8s-spiffe-workload-jwt-exec-auth:0.2.0@sha256:cffed83b451236bad4347110f116e0808a132b57b799acd7c9d8a4ce7cf6b781 AS spiffe-jwt-exec-auth
 
+# Placeholder for the `agentsrc` named build context (the in-tree agent
+# module). A same-named --build-context always takes precedence; building
+# without one yields an empty /agent and a clear go.mod failure.
+FROM scratch AS agentsrc
+
 # Set up golang build container
 FROM ${BASE_REGISTRY}/golang:1.26.5 AS builder
 ARG TARGETOS
@@ -33,6 +38,13 @@ COPY go.sum go.sum
 # Copy in api go modules
 COPY api/go.mod api/go.mod
 COPY api/go.sum api/go.sum
+
+# go.mod replaces github.com/NVIDIA/nke/agent with ../agent, which lives at the
+# repo root, outside this build context. Real builds supply it as the named
+# build context `agentsrc` (see docker-build-local in the Makefile), which
+# overrides the empty placeholder stage below; the placeholder keeps
+# `docker build --check` (CI) parseable without the context.
+COPY --from=agentsrc . /agent
 
 # Cache dependencies before building and copying source to minimize downloads
 # and prevent source changes from invalidating cached dependencies layer.

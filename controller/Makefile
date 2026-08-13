@@ -21,6 +21,15 @@ TEMPORAL_CLI_DOWNLOAD_DIR	?= $(CURDIR)/.go/temporal-cli
 CWE_GOFAIL_E2E_WORKER_BINARY	?= $(CURDIR)/.go/bin/cwe-worker-gofail
 GOFAIL				?= $(shell go env GOPATH)/bin/gofail
 
+# Go tool install location (GOPATH/bin, unless GOBIN is set); matches agent/Makefile.
+GOBIN ?= $(shell go env GOBIN)
+ifeq (,$(GOBIN))
+GOBIN = $(shell go env GOPATH)/bin
+endif
+
+GOLANGCI_LINT_REPO	?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+GOLANGCI_LINT_VERSION	?= v2.7.2
+
 # Image URL to use all building/pushing image targets
 IMG_NAME ?= nvcr.io/j7sbcjl3qgta/cloud-workflow-engine
 IMG_TAG ?= latest
@@ -47,14 +56,8 @@ help: ## Display this help.
 
 .PHONY: lint
 lint: ## Lint source files.
-ifdef CI
-	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v2.7.2; \
-	fi
-	golangci-lint run --timeout 20m --max-same-issues 0 --max-issues-per-linter 0 ./...
-else
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2 run --timeout 5m --max-same-issues 0 --max-issues-per-linter 0 ./...
-endif
+	go install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
+	$(GOBIN)/golangci-lint run --timeout 20m --max-same-issues 0 --max-issues-per-linter 0 ./...
 
 .PHONY: license
 license: ## Ensure license headers at code.
@@ -95,7 +98,7 @@ build:
 .PHONY: fmt
 fmt: ## Format code (gofumpt + goimports; matches .golangci.yml formatters).
 	go run mvdan.cc/gofumpt@v0.9.2 -w -extra .
-	go run golang.org/x/tools/cmd/goimports@v0.36.0 -w -local github.com/NVIDIA/nke/controller,gitlab-master.nvidia.com .
+	go run golang.org/x/tools/cmd/goimports@v0.36.0 -w -local github.com/NVIDIA/nke/controller .
 
 .PHONY: test
 test: ## Execute unit tests (excludes integration tests).
@@ -179,6 +182,7 @@ endif
 docker-build-local: ## Build the docker image for Cloud Workflow Engine
 	DOCKER_BUILDKIT=1 docker build -f Dockerfile --platform linux/amd64 \
 	  --progress=plain \
+	  --build-context agentsrc=../agent \
 	  $(DOCKER_BUILD_SECRET) \
 	  --tag $(IMG_NAME):$(GIT_VERSION) \
 	  --tag $(IMG_NAME):$(BUILD_VERSION) \

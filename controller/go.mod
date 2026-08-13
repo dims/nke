@@ -4,6 +4,10 @@ go 1.25.12
 
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
+	github.com/NVIDIA/cluster-api-provider-nico v0.0.0-20260812152823-b1de7af745d1
+	github.com/NVIDIA/ncx-infra-controller-rest v1.3.0
+	github.com/NVIDIA/nke/agent v0.0.0-00010101000000-000000000000
+	github.com/NVIDIA/nke/controller/api v0.0.0-00010101000000-000000000000
 	github.com/blang/semver/v4 v4.0.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -22,13 +26,9 @@ require (
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.18
 	github.com/uptrace/bun/driver/pgdriver v1.2.18
 	github.com/uptrace/bun/extra/bunslog v1.2.18
-	github.com/NVIDIA/nke/agent v0.0.0-00010101000000-000000000000
-	github.com/NVIDIA/nke/controller/api v0.0.0-00010101000000-000000000000
-	gitlab-master.nvidia.com/nke/cluster-api-provider-nico v0.0.28
-	gitlab-master.nvidia.com/nvmetal/cloud-api-sdk-go v0.0.14
 	go.etcd.io/gofail v0.2.0
-	go.temporal.io/api v1.51.0
-	go.temporal.io/sdk v1.36.0
+	go.temporal.io/api v1.60.0
+	go.temporal.io/sdk v1.39.0
 	go.uber.org/automaxprocs v1.6.0
 	go.yaml.in/yaml/v4 v4.0.0-rc.4
 	golang.org/x/sync v0.21.0
@@ -86,18 +86,18 @@ require (
 	github.com/russellhaering/gosaml2 v0.11.0 // indirect
 	github.com/russellhaering/goxmldsig v1.6.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
-	github.com/spf13/cobra v1.10.1 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/twmb/murmur3 v1.1.5 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.63.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.40.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.40.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
@@ -139,7 +139,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nexus-rpc/sdk-go v0.3.0 // indirect
+	github.com/nexus-rpc/sdk-go v0.5.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2
@@ -173,7 +173,6 @@ require (
 replace (
 	github.com/NVIDIA/nke/agent => ../agent
 	github.com/NVIDIA/nke/controller/api => ./api
-	gitlab-master.nvidia.com/nvmetal/cloud-api-sdk-go => gitlab-master.nvidia.com/nvmetal/carbide-rest-ngc-sdk-go v0.0.14
 	// Controller-runtime v0.23.0 introduced a breaking change in the NewWebhookManagedBy signature.
 	// spire-controller-manager has not yet been updated to use controller-runtime v0.23.0.
 	// So we are pinning the controller-runtime version to v0.22.5 for now.
