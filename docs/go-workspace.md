@@ -94,6 +94,10 @@ To check before pushing exactly what CI will check:
 make work-check
 ```
 
+⚠️ `work-check` is not read-only: it performs the same refresh and then fails if
+anything moved, so a failure leaves your tree edited. That edit *is* the fix —
+review it and commit it.
+
 ## What CI enforces
 
 The **Go Workspace Check** workflow runs `make work-check`, which asserts five
@@ -103,7 +107,7 @@ things. Each maps to a failure this repository can produce:
 |---|---|---|
 | `go.work` and `go.work.sum` are tracked by git | Either file left untracked. `git diff` reports nothing for an untracked path, so the rest of the check would pass in silence. | `make work-sync` and commit both |
 | `go.work` lists exactly the expected modules | A module dropped from or added to the workspace by hand | `make work` and commit `go.work` |
-| `go.work` carries no `replace` | `make work-full` output committed by accident. It repoints a dependency for every module while the module list still looks correct. | `git checkout -- go.work` |
+| `go.work` carries no `replace` | `make work-full` output committed by accident. It repoints a dependency for every module while the module list still looks correct. | `make work`, or `git checkout -- go.work go.work.sum '*/go.mod' '*/go.sum'` |
 | Every `go.mod` in the tree is classified in the `Makefile` | A **new module** added to neither `WORK_MODULES` nor `PRIVATE_MODULES`. It would never be built or synced, and nothing else in CI would mention it. | add it to the right list in the `Makefile`, then `make work-sync` |
 | A full refresh changes nothing | The ordinary stale case: a bump landed in one module, so the others build against a version none of their `go.mod` files admits to | `make work-sync` and commit everything it changes |
 
@@ -134,11 +138,16 @@ This adds `controller` and `controller/forge-vms` and writes the workspace-level
 for both. It needs `gitlab-master.nvidia.com` access, and it forces
 `controller/forge-vms` off its own `v0.0.9`.
 
-The result is **local only**. Undo it before committing:
+The result is **local only**. Undo it before committing — and restore all of it,
+not just `go.work`. If you ran `make work-sync` while the private modules were
+listed, it also rewrote `go.work.sum` and every `go.mod` and `go.sum`:
 
 ```bash
-git checkout -- go.work
+git checkout -- go.work go.work.sum '*/go.mod' '*/go.sum'
 ```
+
+`make work` also resets `go.work` on its own: it drops any module not in
+`WORK_MODULES` and any `replace`.
 
 ## Troubleshooting
 
