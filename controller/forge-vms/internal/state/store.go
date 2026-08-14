@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3" // sqlite driver; requires cgo
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
-	_ "github.com/mattn/go-sqlite3" // sqlite driver; requires cgo
 )
 
 var (
