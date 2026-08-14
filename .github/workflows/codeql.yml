@@ -4,13 +4,24 @@
 # CodeQL static analysis for Go. Results go to Security -> Code scanning.
 #
 # `build-mode: manual` because CodeQL has to observe a real compile to build its
-# database. The build runs in GO_MODULE, so the analysis covers that module.
+# database. Whatever the build step compiles is what gets analysed, and nothing
+# else -- so the scope of this workflow is set by that one command.
 #
-# Only the agent module is covered. controller/ requires two non-public
-# modules — the carbide SDK, reached through the Forge provider, and
-# cluster-api-provider-nico — so it cannot build on a public runner.
-# .github/workflows/lint.yml states the same thing. Widen GO_MODULE when
-# the controller builds from public dependencies.
+# It used to compile agent/ alone, because controller/ required the carbide SDK
+# and could not build on a public runner. #76 replaced that SDK with the public
+# ncx-infra-controller-rest, so the whole workspace builds from public
+# dependencies now, and the build step is `make build` -- which compiles every
+# package in all seven modules.
+#
+# One database rather than a matrix, deliberately. CodeQL produces a single
+# database per run and uploads it under one category, so a matrix would need a
+# category per module and would analyse shared code once per module that imports
+# it. A single traced build covers the same code once.
+#
+# The workspace stays ON, where this file previously set GOWORK=off. That is
+# what makes the build hermetic: the committed vendor/ tree supplies every
+# dependency and nothing is downloaded. It is also why go-version is pinned
+# rather than read from a go.mod -- see the comment on that step.
 
 name: CodeQL
 
@@ -30,17 +41,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-env:
-  # Go module to analyse, relative to the repository root.
-  GO_MODULE: agent
-  # This workflow analyses one module at a time, as it did before the repository
-  # gained a root go.work. GOWORK=off keeps it that way. It is also required:
-  # actions/setup-go pins GOTOOLCHAIN=local, and the Go version installed from a
-  # module's go.mod is older than the one go.work asks for, so leaving the
-  # workspace on fails with "go.work requires go >= 1.26.0". Quoted, because
-  # unquoted `off` is a YAML boolean.
-  GOWORK: "off"
-
 jobs:
   analyze:
     name: Analyze Go
@@ -58,9 +58,20 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: ${{ env.GO_MODULE }}/go.mod
+          # Pin the version the Dockerfiles build with. Not go-version-file: a
+          # go directive is a floor, so it installs the oldest Go a module
+          # allows -- and these seven floors range from 1.25.4 to 1.26.4, while
+          # go.work asks for 1.26.4. setup-go pins GOTOOLCHAIN=local, so reading
+          # agent/go.mod (1.26.0) would fail outright against the workspace:
+          #
+          #   go: go.work requires go >= 1.26.4
+          #       (running go 1.26.0; GOTOOLCHAIN=local)
+          #
+          # Not `stable` either: setup-go resolves it from GitHub's manifest,
+          # which lags upstream Go. Keep this in step with the Dockerfiles.
+          go-version: '1.26.6'
           cache: true
-          cache-dependency-path: ${{ env.GO_MODULE }}/go.sum
+          cache-dependency-path: go.work.sum
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -69,8 +80,19 @@ jobs:
           build-mode: manual
 
       - name: Build
-        working-directory: ${{ env.GO_MODULE }}
-        run: go build ./...
+        # `make build` compiles every package in all seven workspace modules,
+        # which is precisely the set CodeQL should observe. Using the same
+        # command the repository builds with means the analysis cannot drift
+        # from the build: a module added to WORK_MODULES is analysed with no
+        # change here.
+        #
+        # GOPROXY=off asserts that the vendor tree is complete rather than
+        # hoping. Without it a missing vendored dependency would quietly reach
+        # the network, and CodeQL would analyse a build list that is not the one
+        # we ship.
+        env:
+          GOPROXY: "off"
+        run: make build
 
       - name: Run CodeQL analysis
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
