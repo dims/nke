@@ -65,10 +65,19 @@ jobs:
           go-version-file: agent/go.mod
           cache: true
 
-      # Only the agent module is covered today. The controller still depends on
-      # private gitlab-master.nvidia.com modules, so go-licenses cannot resolve
-      # its package graph without credentials. Add it here once it builds from
-      # public dependencies.
+      # Only the agent module is covered today, but no longer for the reason
+      # this comment used to give. It said the controller depends on private
+      # gitlab-master.nvidia.com modules so go-licenses cannot resolve its graph
+      # without credentials. #76 removed those, and the controller builds from
+      # public dependencies now.
+      #
+      # What blocks it instead is the committed vendor/ tree: go-licenses v2
+      # cannot walk it, and fails with
+      #
+      #   cannot find parent package of vendored module modernc.org/libc
+      #
+      # so covering the controller means solving that first, not adding a line
+      # here. The root THIRD_PARTY_NOTICES.md carries the rest of the plan.
       - name: Verify THIRD_PARTY_NOTICES.md is up to date
         working-directory: agent
         run: make notices-check
