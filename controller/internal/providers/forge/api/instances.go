@@ -9,7 +9,7 @@ import (
 	"io"
 	"net/http"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 func UpdateInstance(ctx context.Context, apiClient *forgesdk.APIClient, orgID, instanceID string, payload forgesdk.InstanceUpdateRequest) (*forgesdk.Instance, error) {
@@ -74,7 +74,7 @@ func DeleteInstance(ctx context.Context, apiClient *forgesdk.APIClient, orgID, i
 	apir := apiClient.InstanceAPI.DeleteInstance(ctx, orgID, instanceID).
 		InstanceDeleteRequest(payload)
 
-	res, err := apir.Execute()
+	_, res, err := apir.Execute()
 
 	var statusCode int
 	var body []byte

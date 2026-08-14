@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 // ProductionImageURL is the default production FDE qcow2 image used by e2e tests.
@@ -30,7 +30,7 @@ func RunCreatePollReadyAndDeleteFlow(t *testing.T, env *TestEnv, profile Runtime
 	createPayload := &forgesdk.InstanceCreateRequest{
 		Name:           instanceName,
 		TenantId:       "d282929f-49d5-4dec-8d27-21ceb30ade19",
-		InstanceTypeId: forgesdk.PtrString("itype-mock-001"),
+		InstanceTypeId: *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 		VpcId:          "vpc-mock-001",
 		Labels:         map[string]string{"nke.nvidia.com/node-id": instanceName},
 		Interfaces: []forgesdk.InterfaceCreateRequest{
@@ -73,7 +73,7 @@ func RunPatchLabelsAndRebootFlow(t *testing.T, env *TestEnv, profile RuntimeProf
 	createPayload := &forgesdk.InstanceCreateRequest{
 		Name:           instanceName,
 		TenantId:       "d282929f-49d5-4dec-8d27-21ceb30ade19",
-		InstanceTypeId: forgesdk.PtrString("itype-mock-001"),
+		InstanceTypeId: *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 		VpcId:          "vpc-mock-001",
 		Labels:         map[string]string{"nke.nvidia.com/node-id": instanceName},
 		Interfaces: []forgesdk.InterfaceCreateRequest{
@@ -158,7 +158,7 @@ func RunVMToVMConnectivityFlow(t *testing.T, env *TestEnv, profile RuntimeProfil
 		return &forgesdk.InstanceCreateRequest{
 			Name:           name,
 			TenantId:       "d282929f-49d5-4dec-8d27-21ceb30ade19",
-			InstanceTypeId: forgesdk.PtrString("itype-mock-001"),
+			InstanceTypeId: *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 			VpcId:          "vpc-mock-001",
 			Labels:         map[string]string{"nke.nvidia.com/node-id": name},
 			Interfaces: []forgesdk.InterfaceCreateRequest{
@@ -305,7 +305,7 @@ boot
 	createPayload := &forgesdk.InstanceCreateRequest{
 		Name:           instanceName,
 		TenantId:       "d282929f-49d5-4dec-8d27-21ceb30ade19",
-		InstanceTypeId: forgesdk.PtrString("itype-mock-001"),
+		InstanceTypeId: *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 		VpcId:          "vpc-mock-001",
 		Labels:         map[string]string{"nke.nvidia.com/node-id": instanceName},
 		IpxeScript:     *forgesdk.NewNullableString(forgesdk.PtrString(ipxeScript)),
@@ -442,7 +442,7 @@ boot
 	createPayload := &forgesdk.InstanceCreateRequest{
 		Name:             instanceName,
 		TenantId:         "d282929f-49d5-4dec-8d27-21ceb30ade19",
-		InstanceTypeId:   forgesdk.PtrString("itype-mock-001"),
+		InstanceTypeId:   *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 		VpcId:            "vpc-mock-001",
 		Labels:           map[string]string{"nke.nvidia.com/node-id": instanceName},
 		IpxeScript:       *forgesdk.NewNullableString(forgesdk.PtrString(productionAMD64Script)),
@@ -611,7 +611,7 @@ boot
 	createPayload := &forgesdk.InstanceCreateRequest{
 		Name:             instanceName,
 		TenantId:         "d282929f-49d5-4dec-8d27-21ceb30ade19",
-		InstanceTypeId:   forgesdk.PtrString("itype-mock-001"),
+		InstanceTypeId:   *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 		VpcId:            "vpc-mock-001",
 		Labels:           map[string]string{"nke.nvidia.com/node-id": instanceName},
 		IpxeScript:       *forgesdk.NewNullableString(forgesdk.PtrString(productionIPXEScript)),
@@ -784,7 +784,7 @@ func RunSSHVerificationFlow(t *testing.T, env *TestEnv, profile RuntimeProfile) 
 	createPayload := &forgesdk.InstanceCreateRequest{
 		Name:           instanceName,
 		TenantId:       "d282929f-49d5-4dec-8d27-21ceb30ade19",
-		InstanceTypeId: forgesdk.PtrString("itype-mock-001"),
+		InstanceTypeId: *forgesdk.NewNullableString(forgesdk.PtrString("itype-mock-001")),
 		VpcId:          "vpc-mock-001",
 		UserData:       *forgesdk.NewNullableString(forgesdk.PtrString(userData)),
 		Labels:         map[string]string{"nke.nvidia.com/node-id": instanceName},

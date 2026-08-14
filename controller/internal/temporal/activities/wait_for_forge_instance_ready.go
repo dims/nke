@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 
 	"github.com/NVIDIA/nke/controller/internal/constants"
 	"github.com/NVIDIA/nke/controller/internal/nodes"

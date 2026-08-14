@@ -11,7 +11,7 @@ import (
 	"slices"
 	"unicode/utf8"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 // MachineHealthIssue is our own type to avoid exposing the forgesdk dependency. It's a thin wrapper around the forgesdk.MachineHealthIssue.
@@ -83,8 +83,8 @@ func toForgeSDKMachineHealthIssue(m *MachineHealthIssue) *forgesdk.MachineHealth
 	}
 
 	result := &forgesdk.MachineHealthIssue{
-		Category: &m.Category,
-		Summary:  &m.Summary,
+		Category: m.Category,
+		Summary:  *forgesdk.NewNullableString(&m.Summary),
 	}
 	if m.Details != nil {
 		result.Details = *forgesdk.NewNullableString(m.Details)

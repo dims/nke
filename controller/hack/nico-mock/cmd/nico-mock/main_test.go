@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	nicosdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	nicosdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 func TestUnit_HandleGetInstanceType(t *testing.T) {

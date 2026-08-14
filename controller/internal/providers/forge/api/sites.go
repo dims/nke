@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 func GetSites(ctx context.Context, apiClient *forgesdk.APIClient, orgID, tenantID string) ([]*forgesdk.Site, error) {

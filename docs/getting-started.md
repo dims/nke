@@ -21,8 +21,8 @@ cd nke
 ## controller (Cloud Workflow Engine)
 
 > **`controller/` builds outside the NVIDIA network**, as of #76, which replaced
-> the internal carbide SDK with the public
-> `github.com/NVIDIA/ncx-infra-controller-rest`. The one internal dependency
+> the internal carbide SDK with a public REST SDK, now
+> `github.com/NVIDIA/infra-controller`. The one internal dependency
 > left, `cluster-api-provider-nico`, is carried in the committed `vendor/` tree,
 > so the commands in this section need no credentials. From the repository root,
 > `GOPROXY=off make build` compiles all eight modules and proves it. See

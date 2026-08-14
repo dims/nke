@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 // GetIPBlocks will retrieve the IP blocks for a given site. If a healthy cache exists, it will

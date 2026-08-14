@@ -43,10 +43,9 @@ import (
 	"sync"
 	"time"
 
+	nicosdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
-
-	nicosdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 )
 
 const (
@@ -256,7 +255,9 @@ func (s *server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 
 func (s *server) registerAPIRoutes(mux *http.ServeMux) {
 	register := func(method, suffix string, handler http.HandlerFunc) {
-		for _, apiName := range []string{"carbide", "forge"} {
+		// "nico" is what the infra-controller SDK calls; "carbide" is the name
+		// the archived SDK used. Both are served so a caller on either SDK works.
+		for _, apiName := range []string{"nico", "carbide", "forge"} {
 			mux.HandleFunc(method+" /v2/org/{org}/"+apiName+"/"+suffix, handler)
 		}
 	}
@@ -443,7 +444,6 @@ func (s *server) staticSubnet() nicosdk.Subnet {
 	subnet.SetName(defaultSubnetName)
 	subnet.SetSiteId(s.cfg.SiteID)
 	subnet.SetVpcId(s.cfg.VPCID)
-	subnet.SetTenantId(s.cfg.TenantID)
 	subnet.SetIpv4Prefix(defaultSubnetIPv4Prefix)
 	subnet.SetPrefixLength(int32(defaultSubnetPrefixLength))
 	return *subnet
@@ -911,7 +911,7 @@ func (s *server) loadInstance(ctx context.Context, containerID string) (*nicosdk
 	} else if len(interfaces) > 0 {
 		inst.SetInfinibandInterfaces(instanceInfiniBandInterfacesFromCreateRequests(interfaces))
 	}
-	if interfaces, err := decodeLabelValue[[]nicosdk.NVLinkInterfaceCreateRequest](labels[labelNVLinkInterfaces]); err != nil {
+	if interfaces, err := decodeLabelValue[[]nicosdk.NVLinkInterfaceCreateOrUpdateRequest](labels[labelNVLinkInterfaces]); err != nil {
 		return nil, fmt.Errorf("decode NVLink interfaces label: %w", err)
 	} else if len(interfaces) > 0 {
 		inst.SetNvLinkInterfaces(instanceNVLinkInterfacesFromCreateRequests(interfaces))
@@ -1304,11 +1304,11 @@ func instanceInfiniBandInterfacesFromCreateRequests(requests []nicosdk.InfiniBan
 	return interfaces
 }
 
-func instanceNVLinkInterfacesFromCreateRequests(requests []nicosdk.NVLinkInterfaceCreateRequest) []nicosdk.NVLinkInterface {
+func instanceNVLinkInterfacesFromCreateRequests(requests []nicosdk.NVLinkInterfaceCreateOrUpdateRequest) []nicosdk.NVLinkInterface {
 	interfaces := make([]nicosdk.NVLinkInterface, 0, len(requests))
 	for _, request := range requests {
 		iface := nicosdk.NewNVLinkInterface()
-		if partitionID := request.GetNvLinklogicalPartitionId(); partitionID != "" {
+		if partitionID := request.GetNvLinkLogicalPartitionId(); partitionID != "" {
 			iface.SetNvLinkLogicalPartitionId(partitionID)
 		}
 		if deviceInstance, ok := request.GetDeviceInstanceOk(); ok && deviceInstance != nil {

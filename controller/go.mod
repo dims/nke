@@ -5,7 +5,6 @@ go 1.26.5
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
 	github.com/NVIDIA/cluster-api-provider-nico v0.0.0-20260812152823-b1de7af745d1
-	github.com/NVIDIA/ncx-infra-controller-rest v1.3.0
 	github.com/NVIDIA/nke/agent v0.0.0-00010101000000-000000000000
 	github.com/NVIDIA/nke/controller/api v0.0.0-00010101000000-000000000000
 	github.com/blang/semver/v4 v4.0.0
@@ -115,6 +114,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/cluster-bootstrap v0.35.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
@@ -124,6 +124,7 @@ require (
 )
 
 require (
+	github.com/NVIDIA/infra-controller/rest-api/sdk/standard v0.0.0-20260814082629-65eb38628df8
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

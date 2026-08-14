@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 
 	"github.com/NVIDIA/nke/controller/internal/constants"
 	"github.com/NVIDIA/nke/controller/internal/db"
@@ -225,8 +225,8 @@ func (a *Activities) createForgeInstanceWithLockHeld(
 
 		activeDeviceIDs := getNVLinkActiveDeviceIDs(instanceType)
 		for _, deviceID := range activeDeviceIDs {
-			nvLinkInterface := forgesdk.NVLinkInterfaceCreateRequest{
-				NvLinklogicalPartitionId: forgesdk.PtrString(provisioningConfig.nvLinkLogicalPartitionID.String()),
+			nvLinkInterface := forgesdk.NVLinkInterfaceCreateOrUpdateRequest{
+				NvLinkLogicalPartitionId: forgesdk.PtrString(provisioningConfig.nvLinkLogicalPartitionID.String()),
 				DeviceInstance:           forgesdk.PtrInt32(deviceID),
 			}
 

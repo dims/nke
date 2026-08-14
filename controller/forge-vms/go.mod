@@ -1,9 +1,8 @@
 module github.com/NVIDIA/nke/controller/forge-vms
 
-go 1.25.4
+go 1.26.4
 
 require (
-	github.com/NVIDIA/ncx-infra-controller-rest v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-sqlite3 v1.14.49
@@ -16,6 +15,12 @@ require (
 )
 
 require (
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
+)
+
+require (
+	github.com/NVIDIA/infra-controller/rest-api/sdk/standard v0.0.0-20260814082629-65eb38628df8
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

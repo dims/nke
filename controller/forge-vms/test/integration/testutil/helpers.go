@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 
 	fvmconfig "github.com/NVIDIA/nke/controller/forge-vms/internal/config"
 	"github.com/NVIDIA/nke/controller/forge-vms/internal/seed"

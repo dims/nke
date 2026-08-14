@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 // GetNVLinkLogicalPartitions retrieves all NVLink logical partitions for a given site.

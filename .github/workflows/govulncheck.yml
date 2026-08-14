@@ -6,7 +6,7 @@
 #
 # Every module in the workspace is scanned. It used to be agent/ alone, because
 # controller/ required the carbide SDK and could not build on a public runner.
-# #76 replaced that SDK with the public ncx-infra-controller-rest, so the whole
+# #76 replaced that SDK with a public REST SDK, now infra-controller, so the whole
 # workspace builds from public dependencies and the exclusion no longer has a
 # reason. The build and the lint were widened; this was the piece left behind,
 # which meant the majority of the repository was compiled, linted and never

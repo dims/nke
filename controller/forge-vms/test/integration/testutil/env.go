@@ -20,7 +20,7 @@ import (
 
 	"github.com/lmittmann/tint"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 
 	"github.com/NVIDIA/nke/controller/forge-vms/internal/app"
 	"github.com/NVIDIA/nke/controller/forge-vms/internal/seed"

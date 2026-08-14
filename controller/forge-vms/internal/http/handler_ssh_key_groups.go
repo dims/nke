@@ -6,7 +6,7 @@ package http
 import (
 	nethttp "net/http"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 func (s *Server) handleListSSHKeyGroups(w nethttp.ResponseWriter, r *nethttp.Request) {

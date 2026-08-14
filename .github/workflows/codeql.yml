@@ -11,8 +11,8 @@
 # else -- so the scope of this workflow is set by that one command.
 #
 # It used to compile agent/ alone, because controller/ required the carbide SDK
-# and could not build on a public runner. #76 replaced that SDK with the public
-# ncx-infra-controller-rest, so the whole workspace builds from public
+# and could not build on a public runner. #76 replaced that SDK with a public
+# REST SDK, now infra-controller, so the whole workspace builds from public
 # dependencies now, and the build step is `make build` -- which compiles every
 # package in all eight modules.
 #

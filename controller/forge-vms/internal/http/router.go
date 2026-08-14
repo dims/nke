@@ -28,6 +28,14 @@ type Server struct {
 	sshConfig      sshexec.Config
 }
 
+// v2APINames are the API-name segments the v2 routes are served under. Each
+// corresponds to an SDK generation: "nico" is what the infra-controller SDK
+// calls, "carbide" what the archived SDK called, and "forge" the original.
+// A caller on any of them reaches the same handler.
+//
+//nolint:gochecknoglobals // read by NewHandler and asserted by its test
+var v2APINames = []string{"nico", "carbide", "forge"}
+
 // NewHandler wires every route into an http.NewServeMux and wraps it with
 // the logging and auth middleware chain.
 // logMethods controls which HTTP methods produce a log line; a nil or empty
@@ -49,11 +57,9 @@ func NewHandler(store *state.Store, logger *slog.Logger, logMethods []HTTPMethod
 
 	mux := nethttp.NewServeMux()
 
-	// registerV2 registers a handler under both "carbide" and "forge" API
-	// names so that the NCX SDK's /v2/org/{org}/carbide/... paths are served
-	// alongside the existing /v2/org/{org}/forge/... paths.
+	// registerV2 registers a handler under every name in v2APINames.
 	registerV2 := func(mux *nethttp.ServeMux, method, suffix string, handler nethttp.HandlerFunc) {
-		for _, apiName := range []string{"carbide", "forge"} {
+		for _, apiName := range v2APINames {
 			mux.HandleFunc(method+" /v2/org/{org}/"+apiName+"/"+suffix, handler)
 		}
 	}

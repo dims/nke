@@ -6,7 +6,7 @@ package api
 import (
 	"context"
 
-	forgesdk "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	forgesdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 func GetVPCs(ctx context.Context, apiClient *forgesdk.APIClient, orgID, siteID string) ([]*forgesdk.VPC, error) {
