@@ -4,7 +4,7 @@
 # Lints the shell scripts.
 #
 # actionlint already runs shellcheck, but only over `run:` blocks inside
-# workflow YAML. The 94 standalone .sh files in this tree had nothing checking
+# workflow YAML. The 100 standalone .sh files in this tree had nothing checking
 # them, and three real bugs were sitting in them -- including a dependency
 # check in a runbook script that is compiled into the controller binary and
 # executed on nodes, and that never detected a missing tool. All three parsed
@@ -49,12 +49,12 @@ jobs:
 
       # -S error, not -S warning. The tree is clean at error severity as of
       # this commit, so the gate starts green and any new error-level bug fails
-      # the build. It is NOT clean at warning severity: 36 findings remain,
+      # the build. It is NOT clean at warning severity: 29 findings remain,
       # mostly SC2155 (declare and assign separately), SC2010 (ls | grep) and
       # SC2128 (array expanded without an index). Those are worth fixing, but
-      # folding 36 edits into the change that introduces the check would bury
+      # folding 29 edits into the change that introduces the check would bury
       # the three real bugs it was written for. The step below prints the live
-      # count, so this number does not have to be trusted.
+      # count, so this number does not have to be trusted as it drifts.
       #
       # Raise this to -S warning once that backlog is cleared. The runbook
       # scripts under controller/internal/runbook/scripts/ are the ones to
@@ -80,7 +80,12 @@ jobs:
           mapfile -d '' -t scripts < <(
             find . -name '*.sh' -not -path './vendor/*' -not -path './.git/*' -print0
           )
-          count=$(shellcheck --severity=warning --format=gcc "${scripts[@]}" 2>/dev/null | wc -l | tr -d ' ')
+          # `|| true` is required, not defensive. shellcheck exits non-zero
+          # when it finds anything, and the runner invokes this step with
+          # `bash -e -o pipefail` whatever the script itself sets -- so without
+          # it, a non-empty backlog fails a step whose entire job is to count
+          # the backlog.
+          count=$( { shellcheck --severity=warning --format=gcc "${scripts[@]}" 2>/dev/null || true; } | wc -l | tr -d ' ')
           {
             echo "## shellcheck"
             echo
