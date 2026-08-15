@@ -83,7 +83,13 @@ jobs:
         with:
           go-version-file: go.work
           cache: true
-          cache-dependency-path: go.work.sum
+          # go.work.sum holds only the hashes NOT already in a member's go.sum,
+          # so the versions actually linked often appear in it zero times. Keyed
+          # on it alone, a dependency bump leaves the key unchanged and restores
+          # a stale cache. Same block as go-build.yml.
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
 
       - name: Run golangci-lint
         working-directory: controller
