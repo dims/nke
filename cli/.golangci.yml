@@ -30,10 +30,26 @@ run:
 linters:
   enable:
     - errorlint
+    - goheader
     - misspell
     - revive
     - unconvert
     - usestdlibvars
+  settings:
+    # Mirrors controller/.golangci.yml and controller/forge-vms/.golangci.yml.
+    # goheader with no template silently passes everything, so the template is
+    # the whole point of enabling it.
+    goheader:
+      template: |-
+        SPDX-FileCopyrightText: Copyright (c) {{MOD_YEAR-RANGE}} NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+        SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+
+        NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+        property and proprietary rights in and to this material, related
+        documentation and any modifications thereto. Any use, reproduction,
+        disclosure or distribution of this material and related documentation
+        without an express license agreement from NVIDIA CORPORATION or
+        its affiliates is strictly prohibited.
   exclusions:
     generated: lax
     # std-error-handling is what makes the default errcheck usable: it drops
@@ -47,8 +63,8 @@ linters:
       - std-error-handling
 
 formatters:
-  # Enabled, unlike agent/ and controller/, which disable them pending a
-  # formatting sweep of existing code. This module is already clean.
+  # Enabled, as in controller/ and controller/forge-vms/. agent/ is the only
+  # module that disables them, pending a formatting sweep of existing code.
   enable:
     - gci
     - gofumpt
