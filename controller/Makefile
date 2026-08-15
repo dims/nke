@@ -66,8 +66,19 @@ file-license-check: license ## Verify all files have license headers.
 	fi
 
 .PHONY: generate
-generate:
+generate: ## Run every generator in this module and in api/.
 	go generate ./...
+	$(MAKE) generate-api
+
+# Split out from `generate` so it can run without the rest of the module.
+# Every //go:generate directive in the controller currently lives in
+# api/generate.go, but `go generate ./...` above still has to load this
+# module's package graph -- which reaches the internal
+# cluster-api-provider-nico and therefore needs either credentials or the
+# workspace vendor/ tree. The api module has neither problem: it is public and
+# self-contained, so this target is the half that CI can run.
+.PHONY: generate-api
+generate-api: ## Regenerate the OpenAPI client, server and models.
 	cd api && go generate ./...
 
 # Verify the committed oapi-codegen output is reproducible with the pinned
@@ -75,7 +86,7 @@ generate:
 # un-pinned/wrong generator or an openapi.yaml edit that was not regenerated.
 # Expected to be run on a clean working directory.
 .PHONY: generate-check
-generate-check: generate ## Verify generated API code is up to date.
+generate-check: generate-api ## Verify generated API code is up to date.
 	@if ! git diff --exit-code -- api/models.gen.go api/server.gen.go api/client.gen.go > /dev/null 2>&1; then \
 		echo "Generated API code is out of date. Please run 'make generate' locally and commit the changes."; \
 		echo "Out-of-date files:"; \

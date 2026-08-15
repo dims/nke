@@ -67,9 +67,19 @@ jobs:
             controller/api/go.sum
             controller/api/oapi-codegen.sum
 
-      # Regenerates from openapi.yaml with the pinned generator and fails if the
-      # result differs from what is committed. The target expects a clean tree,
-      # which a fresh checkout is.
+      # generate-check depends on generate-api, not on the full generate
+      # target. The difference matters here: `go generate ./...` across the
+      # whole controller module has to load a package graph that reaches the
+      # internal cluster-api-provider-nico, which a GitHub-hosted runner cannot
+      # fetch and which GOWORK=off puts out of reach of the vendor/ tree. The
+      # api module is public and self-contained, and it holds every
+      # //go:generate directive in the controller, so it is both the half that
+      # can run here and the half this check is about.
+      #
+      # It also fixes the Go version: controller/go.mod asks for a newer
+      # toolchain than controller/api/go.mod, and setup-go pins
+      # GOTOOLCHAIN=local, so loading the outer module under the api module's
+      # Go fails with "go.mod requires go >= 1.26.4".
       - name: Verify generated API code is up to date
         working-directory: controller
         run: make generate-check
