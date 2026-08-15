@@ -47,7 +47,9 @@ concurrency:
 
 jobs:
   test:
-    name: Unit tests
+    # See the note in agent-test.yml: the module goes in the job name so a
+    # required check can name exactly one job.
+    name: Unit tests (cli)
     runs-on: ubuntu-latest
     if: github.repository == 'NVIDIA/nke'
     timeout-minutes: 15

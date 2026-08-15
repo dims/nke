@@ -47,7 +47,11 @@ concurrency:
 
 jobs:
   test:
-    name: Unit tests
+    # Named for the module. Branch protection matches a required check by job
+    # name, not by workflow, so two jobs sharing a name are indistinguishable
+    # to it -- see controller-test.yml, which has always disambiguated via its
+    # matrix.
+    name: Unit tests (agent)
     runs-on: ubuntu-latest
     if: github.repository == 'NVIDIA/nke'
     timeout-minutes: 15
