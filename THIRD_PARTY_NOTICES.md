@@ -30,12 +30,15 @@ the dependency tree without the build going red.
 | Component | Why | Tracked by |
 |---|---|---|
 | `controller/` — the Cloud Workflow Engine | `controller/go.mod` requires two modules that are not public. `go-licenses` has to resolve every module in the graph to walk the import closure, so it cannot produce a complete or accurate list until those dependencies are removed. | The work to make `controller/` build from public dependencies |
+| `cli/` — the `nkectl` command | Newly imported; the notices have not been generated yet. Nothing blocks it: every `cli/go.mod` dependency is public, so the import closure can be walked today. | Generating notices for `cli/`, following the recipe below |
 
-**A partial file would be worse than none here.** A notices file that silently
-omits the dependencies reached through the private modules would claim
-completeness it does not have, and anyone relying on it for license compliance
-would be relying on the wrong list. The row above stays open until the closure
-can be walked end to end.
+The two rows are open for different reasons. `cli/` only needs the generator
+pointed at it. `controller/` cannot be covered at all yet: **a partial file
+would be worse than none there.** A notices file that silently omits the
+dependencies reached through the private modules would claim completeness it
+does not have, and anyone relying on it for license compliance would be relying
+on the wrong list. That row stays open until the closure can be walked end to
+end.
 
 When `controller/` builds from public dependencies, cover it by copying
 `agent/hack/generate-notices.sh`, `agent/Makefile`'s `notices` and

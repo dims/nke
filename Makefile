@@ -21,6 +21,7 @@ BIN_DIR ?= $(CURDIR)/bin
 # vendor/ tree, so `build` gives an outside contributor the same result as CI.
 # Re-vendoring (inside `work-sync`) is the only step that needs access to it.
 WORK_MODULES := agent \
+                cli \
                 controller \
                 controller/api \
                 controller/forge-vms \
@@ -39,6 +40,7 @@ WORK_MODULES := agent \
 # controller/Makefile for it. controller/forge-vms ships through its own
 # Makefile and the container image.
 CMD_MODULES := agent \
+               cli \
                controller/hack/capd-reboot-controller \
                controller/hack/nico-mock
 
