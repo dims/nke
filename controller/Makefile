@@ -92,10 +92,20 @@ fmt: ## Format code (gofumpt + goimports; matches .golangci.yml formatters).
 	go run mvdan.cc/gofumpt@v0.11.0 -w -extra .
 	go run golang.org/x/tools/cmd/goimports@v0.48.0 -w -local github.com/NVIDIA/nke/controller,gitlab-master.nvidia.com .
 
+# GO_TEST_FLAGS lets CI add -race without the workflow having to restate the
+# test command, so `make test` stays the one definition of what "the tests" are.
+GO_TEST_FLAGS ?=
+
+# atomic, not count. Go rejects `-covermode count` outright when -race is on:
+# "-covermode must be \"atomic\", not \"count\", when -race is enabled". atomic
+# is valid with or without the race detector, so one setting covers both and
+# there is no conditional to get wrong.
+GO_COVER_MODE ?= atomic
+
 .PHONY: test
 test: ## Execute unit tests (excludes integration tests).
 	# See: https://docs.gitlab.com/ee/ci/testing/test_coverage_visualization.html#go-example
-	go test $(shell go list ./... | grep -v './integration-test') -coverprofile=coverage.txt -covermode count
+	go test $(GO_TEST_FLAGS) $(shell go list ./... | grep -v './integration-test') -coverprofile=coverage.txt -covermode $(GO_COVER_MODE)
 	go run github.com/boumenot/gocover-cobertura@v1.2.0 < coverage.txt > cobertura.xml
 
 .PHONY: test-integration
