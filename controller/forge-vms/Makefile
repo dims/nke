@@ -1,7 +1,7 @@
 GO ?= go
-
 REPO_ROOT := $(shell pwd)
 BINARY := $(REPO_ROOT)/bin/forge-vms
+SETCAP := sudo setcap cap_net_admin+ep
 
 # Go tool install location (GOPATH/bin, unless GOBIN is set); matches agent/Makefile.
 GOBIN ?= $(shell $(GO) env GOBIN)
@@ -10,8 +10,7 @@ GOBIN = $(shell $(GO) env GOPATH)/bin
 endif
 
 GOLANGCI_LINT_REPO    ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.7.2
-SETCAP := sudo setcap cap_net_admin+ep
+GOLANGCI_LINT_VERSION ?= v2.12.2
 
 .PHONY: \
 	build build-privileged run run-vm test \
@@ -101,6 +100,8 @@ teardown:
 fmt:
 	$(GO) fmt ./...
 
+# One recipe for CI and local, pinned by version. The previous CI branch
+# installed into /usr/local/bin, which a GitHub runner cannot write to.
 lint:
 	$(GO) install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
 	$(GOBIN)/golangci-lint run --timeout 10m --max-same-issues 0 --max-issues-per-linter 0 ./...

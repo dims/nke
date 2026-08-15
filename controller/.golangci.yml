@@ -77,7 +77,7 @@ linters:
     - godox
     - goheader
     - gomoddirectives
-    - gomodguard
+    - gomodguard_v2
     - goprintffuncname
     - gosec
     - gosmopolitan
@@ -131,7 +131,6 @@ linters:
         # genproto/googleapis/* split modules in the workspace build list; see
         # the comment on the replace directive in go.mod.
         - google.golang.org/genproto
-        - sigs.k8s.io/controller-runtime
     cyclop:
       max-complexity: 15
     depguard:

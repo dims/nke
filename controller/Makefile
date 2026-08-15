@@ -7,25 +7,20 @@
 # disclosure or distribution of this material and related documentation
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
+
 WORKER_BIN_NAME			?= cloud-workflow-engine
 TEMPORAL_CLI_DOWNLOAD_DIR	?= $(CURDIR)/.go/temporal-cli
 CWE_GOFAIL_E2E_WORKER_BINARY	?= $(CURDIR)/.go/bin/cwe-worker-gofail
 GOFAIL				?= $(shell go env GOPATH)/bin/gofail
-
-# Go tool install location (GOPATH/bin, unless GOBIN is set); matches agent/Makefile.
-GOBIN ?= $(shell go env GOBIN)
-ifeq (,$(GOBIN))
-GOBIN = $(shell go env GOPATH)/bin
-endif
-
-GOLANGCI_LINT_REPO	?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-GOLANGCI_LINT_VERSION	?= v2.7.2
 
 # Image URL to use all building/pushing image targets
 IMG_NAME ?= nvcr.io/j7sbcjl3qgta/cloud-workflow-engine
 IMG_TAG ?= latest
 IMG ?= ${IMG_NAME}:${IMG_TAG}
 export NAME := cloud-workflow-engine
+# Prefer a controller/vX.Y.Z tag, so the monorepo can tag components
+# independently; fall back to a bare vX.Y.Z, then to v0.0.0. The patsubst strips
+# the component prefix so the image tag stays a plain version.
 _BUILD_VERSION_RAW := $(shell git describe --tags --dirty --match 'controller/v[0-9]*' 2>/dev/null || git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null || echo "v0.0.0")
 BUILD_VERSION ?= $(patsubst controller/%,%,$(_BUILD_VERSION_RAW))
 
@@ -46,14 +41,25 @@ help: ## Display this help.
 
 ##@ Build
 
+# Go tool install location (GOPATH/bin, unless GOBIN is set); matches agent/Makefile.
+GOLANGCI_BIN ?= $(shell go env GOBIN)
+ifeq (,$(GOLANGCI_BIN))
+GOLANGCI_BIN = $(shell go env GOPATH)/bin
+endif
+
+# Matches agent/Makefile: one recipe for CI and local, pinned by version rather
+# than by piping an install script from the network.
+GOLANGCI_LINT_REPO    ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+GOLANGCI_LINT_VERSION ?= v2.12.2
+
 .PHONY: lint
 lint: ## Lint source files.
 	go install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
-	$(GOBIN)/golangci-lint run --timeout 20m --max-same-issues 0 --max-issues-per-linter 0 ./...
+	$(GOLANGCI_BIN)/golangci-lint run --timeout 20m --concurrency 4 --max-same-issues 0 --max-issues-per-linter 0 ./...
 
 .PHONY: license
 license: ## Ensure license headers at code.
-	go run github.com/google/addlicense@v1.1.1 -f ./hack/boilerplate.addlicense.txt -ignore '.local/**' -ignore 'hack/**' -ignore 'profiles/osProfiles/**/testUserData.yaml' -ignore '**/testUserData.yaml' -ignore 'internal/kubeadmconfig/testdata/**' -ignore 'internal/controllers/tenantaccess/testdata/**' -ignore 'forge-vms/ui/vendor/**' -ignore 'forge-vms/test/integration/testutil/testdata/**' -ignore 'forge-vms/.dev/**' -ignore 'deploy/charts/**' .
+	go run github.com/google/addlicense@v1.1.1 -f ./hack/boilerplate.addlicense.txt -ignore '.local/**' -ignore 'hack/**' -ignore 'test/fixtures/profiles/**' -ignore '**/testUserData.yaml' -ignore 'internal/kubeadmconfig/testdata/**' -ignore 'internal/controllers/tenantaccess/testdata/**' -ignore 'forge-vms/ui/vendor/**' -ignore 'forge-vms/test/integration/testutil/testdata/**' -ignore 'forge-vms/.dev/**' -ignore 'deploy/charts/**' .
 
 # Expected to be run on clean working directory.
 .PHONY: file-license-check
@@ -89,8 +95,8 @@ build:
 
 .PHONY: fmt
 fmt: ## Format code (gofumpt + goimports; matches .golangci.yml formatters).
-	go run mvdan.cc/gofumpt@v0.9.2 -w -extra .
-	go run golang.org/x/tools/cmd/goimports@v0.36.0 -w -local github.com/NVIDIA/nke/controller .
+	go run mvdan.cc/gofumpt@v0.11.0 -w -extra .
+	go run golang.org/x/tools/cmd/goimports@v0.48.0 -w -local github.com/NVIDIA/nke/controller .
 
 .PHONY: test
 test: ## Execute unit tests (excludes integration tests).
@@ -138,6 +144,10 @@ test-e2e-capd-local: ## Bootstrap Colima and run all CAPD e2e tests with local C
 test-e2e-forge-vms: ## Run Forge VMs happy-path e2e tests
 	make test-e2e ARGS='--label-filter="forge-vms && happy-path && (lifecycle || readiness) && !scale && !upgrade && !reboot"'
 
+.PHONY: test-e2e-forge-vms-os-profiles
+test-e2e-forge-vms-os-profiles: ## Run the opt-in Forge VMs OS profile provisioning matrix
+	$(MAKE) test-e2e E2E_TIMEOUT=6h ARGS='--label-filter="forge-vms && os-profiles"'
+
 .PHONY: e2e-gofail
 e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
 	@bash -euo pipefail -c '\
@@ -151,7 +161,7 @@ e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
 		go build -tags gofail -o "$(CWE_GOFAIL_E2E_WORKER_BINARY)" ./cmd/worker; \
 		TEMPORAL_CLI_DOWNLOAD_DIR="$(TEMPORAL_CLI_DOWNLOAD_DIR)" \
 			CWE_GOFAIL_E2E_WORKER_BINARY="$(CWE_GOFAIL_E2E_WORKER_BINARY)" \
-			go test -v -tags gofail ./e2e/gofail -run TestGofailRunbookWorkerCrashRetriesAfterHeartbeatTimeout -count=1; \
+			go test -v -tags gofail ./e2e/gofail -timeout 30m -count=1; \
 		cleanup; \
 		trap - EXIT; \
 		test -z "$$(find . -name "*.fail.go" -print)" \
@@ -175,20 +185,6 @@ docker-build-local: ## Build the controller image for amd64 and load it into the
 	  --build-arg GIT_VERSION=${GIT_VERSION} \
 	  ..
 
-.PHONY: docker-build-multiarch
-docker-build-multiarch: ## Build the controller image for linux/amd64 and linux/arm64 (requires --push or --output)
-	@# Builds both architectures but does not load them into the local daemon.
-	@# To push: add --push and set IMG. To export: add --output type=oci,dest=cwe.tar.
-	docker buildx build -f Dockerfile \
-	  --platform linux/amd64,linux/arm64 \
-	  --progress=plain \
-	  --tag $(IMG_NAME):$(GIT_VERSION) \
-	  --tag $(IMG_NAME):$(BUILD_VERSION) \
-	  --tag $(IMG) \
-	  --build-arg BUILD_VERSION=${BUILD_VERSION} \
-	  --build-arg GIT_VERSION=${GIT_VERSION} \
-	  ..
-
 # Publish targets for pushing to an explicit registry (used by CI's
 # image-nvcr.yml). These deliberately do NOT use IMG_NAME/IMG: this OSS repo
 # must never default-push to the internal production image
@@ -203,6 +199,20 @@ IMG_REPO ?=
 PUSH_TAGS ?=
 ARCH ?= amd64
 BUILDX_EXTRA_ARGS ?=
+
+.PHONY: docker-build-multiarch
+docker-build-multiarch: ## Build the controller image for linux/amd64 and linux/arm64 (requires --push or --output)
+	@# Builds both architectures but does not load them into the local daemon.
+	@# To push: add --push and set IMG. To export: add --output type=oci,dest=cwe.tar.
+	docker buildx build -f Dockerfile \
+	  --platform linux/amd64,linux/arm64 \
+	  --progress=plain \
+	  --tag $(IMG_NAME):$(GIT_VERSION) \
+	  --tag $(IMG_NAME):$(BUILD_VERSION) \
+	  --tag $(IMG) \
+	  --build-arg BUILD_VERSION=${BUILD_VERSION} \
+	  --build-arg GIT_VERSION=${GIT_VERSION} \
+	  ..
 
 .PHONY: check-img-repo
 check-img-repo:
@@ -237,3 +247,91 @@ run: ## Runs the worker.
 .PHONY: debug
 debug: ## Runs the worker with the delve debugger (attach on :12345).
 	dlv debug --headless --listen=:12345 ./cmd/worker/main.go
+
+GO_LICENSES_VERSION ?= v2.0.1
+# Installed into ./bin rather than the shared GOBIN so a stale global binary
+# cannot leak in — see the toolchain note below for why that matters.
+GO_LICENSES         ?= $(CURDIR)/bin/go-licenses
+
+# go-licenses embeds golang.org/x/tools/go/packages and must be built with the
+# SAME toolchain that `go list` runs inside this module. A module's `go`
+# directive can make Go switch toolchains (GOTOOLCHAIN=auto), and on a mismatch
+# go-licenses reports every stdlib package as "does not have module info" and
+# produces nothing at all — a failure that reads like a broken generator rather
+# than a stale binary. `go install pkg@version` deliberately ignores the current
+# module, so the toolchain has to be pinned explicitly rather than inherited.
+GO_TOOLCHAIN := $(shell go version | awk '{print $$3}')
+
+$(GO_LICENSES):
+	@echo "Installing go-licenses $(GO_LICENSES_VERSION) (toolchain $(GO_TOOLCHAIN))..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) GOBIN=$(CURDIR)/bin \
+		go install github.com/google/go-licenses/v2@$(GO_LICENSES_VERSION)
+
+# ⚠️ THE THREE TARGETS BELOW DO NOT WORK IN THIS REPOSITORY YET. They came
+# across verbatim in the v0.0.653 upstream sync, where controller/ WAS the
+# repository root: a single module, no Go workspace, its own vendor/ tree and
+# its own THIRD_PARTY_NOTICES.md. Every one of those assumptions is false here,
+# and each breaks a different target. Diagnosed rather than fixed, because
+# wiring up controller notices is its own change:
+#
+#   THE BLOCKER, shared by notices and license-policy-check: go-licenses takes
+#   this module directory as rootDir, but the vendor/ tree lives one level up at
+#   the repository root, so it fails with "rootDir .../controller should contain
+#   dir .../vendor/...". Porting means running it from the root, or teaching it
+#   where the workspace vendor tree is.
+#
+#   notices-check         additionally gates on controller/THIRD_PARTY_NOTICES.md,
+#                         which is deliberately absent here — see the Dockerfile,
+#                         and the root THIRD_PARTY_NOTICES.md, which states that
+#                         controller/ is not yet covered.
+#   license-policy-check  had a second, separate bug: `go list -m` prints SEVEN
+#                         module paths under the workspace, not one, and unquoted
+#                         they word-split into extra arguments. That one IS fixed
+#                         below (`GOWORK=off`, quoted) — it just reaches the
+#                         rootDir blocker afterwards.
+#
+# The upstream comment below still describes the GitLab pipeline, which does not
+# exist here — there is no .gitlab-ci.yml in this repository. Kept verbatim so
+# the follow-up can see what these were meant to pair with.
+#
+# Permissive licenses approved for redistribution. Matches the allowlist used by
+# NVIDIA/aicr. A dependency introducing anything else - copyleft in particular -
+# fails the check and needs a conscious decision rather than silent acceptance.
+#
+# This is a local pre-flight, not the gate of record. CI enforces dependency
+# licenses in the security stage via the shared go-license-checks job
+# (nke/gitlab-ci-cd, templates/security/go-license-checks.gitlab-ci.yml), which
+# runs over ./... rather than just the shipped binary. The two differ in shape:
+# CI denies by license *type* (restricted, reciprocal, forbidden, unknown) while
+# this allows by license *name*, which is the stricter test on the packages it
+# covers. Both pass on the current dependency set. Run this before pushing to
+# catch a bad dependency without waiting for the pipeline.
+ALLOWED_LICENSES ?= MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,Zlib
+
+.PHONY: license-policy-check
+license-policy-check: $(GO_LICENSES) ## Verify every third-party dependency uses an approved license.
+	@echo "Checking dependency licenses against $(ALLOWED_LICENSES)..."
+	@# GOWORK=off: under the workspace `go list -m` prints all seven module
+	@# paths, which word-split into extra arguments here.
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO_LICENSES) check ./cmd/worker \
+		--allowed_licenses=$(ALLOWED_LICENSES) \
+		--ignore="$$(GOWORK=off go list -m),github.com/NVIDIA/nke/agent,github.com/NVIDIA/cluster-api-provider-nico"
+
+.PHONY: notices
+notices: $(GO_LICENSES) ## Regenerate THIRD_PARTY_NOTICES.md for the released worker binary.
+	@GO_LICENSES="$(GO_LICENSES)" ./hack/generate-notices
+
+# Not declared as depending on `notices`: the tracked-file gate below is cheap
+# and must run before spending minutes regenerating.
+.PHONY: notices-check
+notices-check: ## Verify THIRD_PARTY_NOTICES.md is up to date.
+	@# git diff reports nothing for an untracked path, so without this an
+	@# uncommitted or accidentally-removed notices file would pass silently.
+	@git ls-files --error-unmatch THIRD_PARTY_NOTICES.md > /dev/null 2>&1 \
+		|| { echo "THIRD_PARTY_NOTICES.md is not tracked by git. Run 'make notices' and commit it."; exit 1; }
+	@$(MAKE) --no-print-directory notices
+	@if ! git diff --exit-code -- THIRD_PARTY_NOTICES.md > /dev/null 2>&1; then \
+		echo "THIRD_PARTY_NOTICES.md is out of date. Please run 'make notices' locally and commit the changes."; \
+		git diff --name-only -- THIRD_PARTY_NOTICES.md; \
+		exit 1; \
+	fi

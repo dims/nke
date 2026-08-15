@@ -36,7 +36,7 @@ type UpgradeControlPlaneAddonsResult struct {
 }
 
 // UpgradeControlPlaneAddons runs the embedded upgrade-kubelet-kubeadm runbook on a
-// healthy control plane node vian agent ExecuteScript to upgrade cluster add-ons
+// healthy control plane node via agent ExecuteScript to upgrade cluster add-ons
 // (kube-proxy, CoreDNS) to the target Kubernetes version.
 //
 // It runs kubeadm in KUBEADM_UPGRADE_ONLY mode: only `kubeadm upgrade apply` is
@@ -70,8 +70,8 @@ func UpgradeControlPlaneAddons(ctx workflow.Context, input UpgradeControlPlaneAd
 			RunbookName: "upgrade-kubelet-kubeadm",
 			RunbookEnv: map[string]string{
 				"VERSION":              input.KubernetesVersion,
-				"IS_MASTER":            "true",
-				"KUBEADM_UPGRADE_ONLY": "true",
+				"IS_MASTER":            runbookEnvTrue,
+				"KUBEADM_UPGRADE_ONLY": runbookEnvTrue,
 			},
 		},
 	).Get(ctx, &result); err != nil {

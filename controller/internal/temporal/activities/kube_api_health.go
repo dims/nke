@@ -20,7 +20,7 @@ import (
 
 // This is a faithful port of SWE's KubeAPIHealthy cluster preflight
 // (site-workflow-engine internal/rollout/preflights/kube_api.go + lib.go). It probes
-// kube-apiserver /readyz?verbose on every control-plane node — vian agent's
+// kube-apiserver /readyz?verbose on every control-plane node — via the agent's
 // ExecuteScript RPC running `kubectl --raw` against that node's OWN apiserver
 // (--server https://localhost:6443) — and gates on healthyRequired(N) nodes being
 // healthy. Running the probe on each node (rather than a single network call to the

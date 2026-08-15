@@ -1,0 +1,10 @@
+#cloud-config
+hostname: spiffe-test-node
+preserve_hostname: false
+package_update: true
+package_upgrade: false
+
+runcmd:
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y nke-agent=0.1.26 nke-kubeadm-distro-1.31.9 spire-agent
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y nke-cni-ovn-images-1.4.0
+  - touch /run/cloud-init.done

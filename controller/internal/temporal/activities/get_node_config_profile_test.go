@@ -193,7 +193,7 @@ func referencedRunbooksFromConfigProfiles(t *testing.T) map[string]struct{} {
 	t.Helper()
 
 	runbooks := map[string]struct{}{}
-	configProfilesDir := filepath.Join(repoRoot(t), "profiles", "configProfiles")
+	configProfilesDir := configProfilesDirForTest(t)
 	err := filepath.WalkDir(configProfilesDir, func(profilePath string, d os.DirEntry, err error) error {
 		require.NoError(t, err)
 		if d.IsDir() {
@@ -242,6 +242,29 @@ func addHookRunbook(runbooks map[string]struct{}, hook *HookSpec) {
 		return
 	}
 	runbooks[hook.Runbook.Name] = struct{}{}
+}
+
+// configProfilesDirForTest resolves fleet config profiles (NKX-13910 moved them
+// to nke-site-deploy). Prefer CWE_PROFILES_DIR, then sibling checkout.
+func configProfilesDirForTest(t *testing.T) string {
+	t.Helper()
+	if dir := os.Getenv("CWE_PROFILES_DIR"); dir != "" {
+		return filepath.Join(dir, "configProfiles")
+	}
+	sibling := filepath.Join(repoRoot(t), "..", "nke-site-deploy", "cwe-profiles", "0.1.0", "profiles", "configProfiles")
+	if _, err := os.Stat(sibling); err == nil {
+		return sibling
+	}
+	// nke-site-deploy is internal, so the sibling above never exists in CI or
+	// for an outside contributor. Fall back to the in-tree fixtures, the way
+	// createForgeInstance's osProfiles helper does, so this runs somewhere
+	// rather than skipping everywhere.
+	fixture := filepath.Join(repoRoot(t), "test", "fixtures", "profiles", "configProfiles")
+	if _, err := os.Stat(fixture); err == nil {
+		return fixture
+	}
+	t.Skip("no config profiles available; set CWE_PROFILES_DIR to nke-site-deploy/cwe-profiles/*/profiles")
+	return ""
 }
 
 func repoRoot(t *testing.T) string {

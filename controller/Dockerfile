@@ -70,7 +70,10 @@ WORKDIR /
 COPY --from=builder /workspace/controller/bin/cloud-workflow-engine /usr/local/bin/cloud-workflow-engine
 COPY --from=spiffe-jwt-exec-auth /ko-app/cmd /opt/spiffe/bin/k8s-spiffe-workload-jwt-exec-auth
 
-COPY ./controller/profiles /profiles
+# OS/config profiles are operator-supplied at runtime (PROFILES_DIR), not baked
+# into the image -- it keeps NVIDIA-internal profile content out of the OSS
+# image. Upstream NKX-13910.
+RUN mkdir -p /profiles
 COPY ./controller/ui /ui
 
 # The image is a redistribution of this work and of every dependency linked into
