@@ -36,11 +36,17 @@ checks the current workflows report:
 | `DCO` | the DCO GitHub App, not a workflow | yes |
 | `Build binaries` | `.github/workflows/go-build.yml` | **no — path-filtered** |
 | `Check go.work and go.work.sum are current` | `.github/workflows/go-work-check.yml` | **no — path-filtered** |
+| `actionlint` | `.github/workflows/actionlint.yml` | **no — path-filtered** |
 
-⚠️ **Do not mark the last two required.** Both filter on `paths:`, so a
+⚠️ **Do not mark the last three required.** All filter on `paths:`, so a
 documentation-only pull request never reports them — which is exactly the trap
 described next. Require them only if the filters go, or a skip shim reports the
 same check name.
+
+⚠️ **`actionlint` being unrequirable has already cost something.** A red
+`actionlint` run merged to `main` and stayed red, and because the workflow file
+is then inherited by every branch, the failure reports on every open pull
+request as though that pull request caused it.
 
 Confirm the exact names before you require one. A required check that names a
 job which never reports leaves every pull request waiting forever:
