@@ -39,8 +39,11 @@ WORK_MODULES := agent \
 # loop would produce the wrong name and no version. `build` delegates to
 # controller/Makefile for it. controller/forge-vms ships through its own
 # Makefile and the container image.
+#
+# cli is absent for the version half of that same reason: nkectl reports a
+# build version, and this loop passes no ldflags, so it would report "dev".
+# `build` delegates to cli/Makefile.
 CMD_MODULES := agent \
-               cli \
                controller/hack/capd-reboot-controller \
                controller/hack/nico-mock
 
@@ -252,6 +255,11 @@ build: ## Build every workspace package, and the released commands into bin/.
 	@$(MAKE) --no-print-directory -C controller build >/dev/null || exit 1
 	@cp controller/bin/$(CWE_BIN_NAME) $(BIN_DIR)/ \
 		|| { echo "ERROR: controller/Makefile no longer produces bin/$(CWE_BIN_NAME). Update CWE_BIN_NAME here to match its WORKER_BIN_NAME."; exit 1; }
+	@# Same reason as controller: cli/Makefile owns nkectl's version ldflags.
+	@echo "- building cli"
+	@$(MAKE) --no-print-directory -C cli build >/dev/null || exit 1
+	@cp cli/bin/nkectl $(BIN_DIR)/ \
+		|| { echo "ERROR: cli/Makefile no longer produces bin/nkectl."; exit 1; }
 	@echo "Built into $(BIN_DIR):"
 	@ls -1 $(BIN_DIR) | sed 's/^/    /'
 
