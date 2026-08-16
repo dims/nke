@@ -70,8 +70,14 @@ build:
 	  *) echo "  $$out";; \
 	esac
 
+# GO_TEST_FLAGS lets CI add -race without the workflow restating the test
+# command, so `make test` stays the one definition of what the tests are.
+# controller-test.yml sets it; without this the matrix entry would run without
+# the race detector and nothing would say so.
+GO_TEST_FLAGS ?=
+
 test:
-	$(GO) test ./...
+	$(GO) test $(GO_TEST_FLAGS) ./...
 
 # golangci-lint applies the formatters enabled in .golangci.yml (gci, gofumpt),
 # so there is no separate gofmt step here.
