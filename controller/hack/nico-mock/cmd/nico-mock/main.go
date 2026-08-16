@@ -43,9 +43,10 @@ import (
 	"sync"
 	"time"
 
-	nicosdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
+
+	nicosdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 )
 
 const (
