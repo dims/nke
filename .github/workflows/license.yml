@@ -76,14 +76,21 @@ concurrency:
   group: license-checks-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
-# This workflow works one module at a time, as it did before the repository
-# gained a root go.work. GOWORK=off keeps it that way. It is also required:
-# the license-check job sets GOTOOLCHAIN=local itself, and the Go version
-# installed from a module's go.mod is older than the one go.work asks for, so
-# leaving the workspace on fails with "go.work requires go >= 1.26.0".
-# (This workflow pinned setup-go v5.6.0, which did not set GOTOOLCHAIN itself,
-# until the 2026-08-13 bump to v7.0.0 — which does. The GOWORK=off above is what
-# keeps that from mattering either way.)
+# header-check works one module at a time, as this whole workflow did before the
+# repository gained a root go.work. GOWORK=off keeps it that way, and is
+# required: that job reads the Go version from the module's own go.mod, which is
+# older than go.work asks for, so leaving the workspace on fails with
+# "go.work requires go >= 1.26.0".
+#
+# license-check turns it back on for itself. It has to: it reads the vendor tree
+# at the workspace root, and with GOWORK=off there is no main module there, so
+# every pattern fails with
+#
+#   pattern ./agent/...: directory prefix agent does not contain main module
+#   or its selected dependencies
+#
+# That job reads its Go version from go.work instead, so the version mismatch
+# above cannot bite it. See the job for both.
 env:
   GOWORK: "off"
 
@@ -140,6 +147,11 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    # Undoes the workflow-level GOWORK=off for this job only. Empty means
+    # "find go.work normally", which is what reading the root vendor tree
+    # needs. header-check keeps the workflow-level value.
+    env:
+      GOWORK: ""
     strategy:
       matrix:
         module: ${{ fromJson(needs.discover-modules.outputs.modules) }}
