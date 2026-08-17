@@ -14,7 +14,7 @@ import (
 	"time"
 
 	api "github.com/NVIDIA/nke/controller/api"
-	"github.com/NVIDIA/nke/controller/nkectl/internal/config"
+	"github.com/NVIDIA/nke/cli/internal/config"
 )
 
 // CWEClient is a high-level client for the CWE REST API.

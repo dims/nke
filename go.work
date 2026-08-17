@@ -16,6 +16,6 @@ use (
 	./controller/forge-vms
 	./controller/hack/capd-reboot-controller
 	./controller/hack/nico-mock
-	./controller/nkectl
+	./cli
 	./controller/test/e2e
 )

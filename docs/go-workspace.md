@@ -15,7 +15,7 @@ when the first two go stale.
 | `controller/api` | yes | builds from public dependencies |
 | `controller/hack/capd-reboot-controller` | yes | builds from public dependencies |
 | `controller/hack/nico-mock` | yes | builds from public dependencies |
-| `controller/nkectl` | yes | builds from public dependencies |
+| `cli` | yes | builds from public dependencies |
 | `controller/test/e2e` | yes | builds from public dependencies |
 | `controller` | yes | public dependencies + one vendored INTERNAL module |
 | `controller/forge-vms` | yes | builds from public dependencies |

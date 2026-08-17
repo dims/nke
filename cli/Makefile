@@ -3,7 +3,7 @@
 
 # Module-level targets, matching the other workspace members. The root Makefile
 # builds nkectl into the repository's bin/ as part of `make build`; this file is
-# for working inside controller/nkectl/ alone, and it is what the Lint workflow
+# for working inside cli/ alone, and it is what the Lint workflow
 # invokes.
 #
 # Every dependency here is public, so these targets need neither the workspace

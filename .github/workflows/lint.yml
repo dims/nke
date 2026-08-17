@@ -151,14 +151,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: controller/nkectl/go.mod
+          go-version-file: cli/go.mod
           cache: true
           cache-dependency-path: |
-            controller/nkectl/go.sum
+            cli/go.sum
             **/go.sum
 
       - name: Run golangci-lint
-        working-directory: controller/nkectl
+        working-directory: cli
         run: make lint
 
   lint-nico-mock:
