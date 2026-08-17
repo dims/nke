@@ -55,11 +55,11 @@ jobs:
           persist-credentials: false
 
       # A tag is <module-directory>/vX.Y.Z, because that is what Go requires of a
-      # submodule: github.com/NVIDIA/nke/controller/nkectl is tagged
-      # controller/nkectl/vX.Y.Z. So the directory is read back off the tag and
-      # nothing below needs to name a component. Move a module and its tag prefix
-      # moves with it, because Go makes them the same string; go.work then says
-      # whether the directory is real. A bare vX.Y.Z is the whole repository.
+      # submodule: github.com/NVIDIA/nke/cli is tagged cli/vX.Y.Z. So the
+      # directory is read back off the tag and nothing below needs to name a
+      # component. Move a module and its tag prefix moves with it, because Go
+      # makes them the same string; go.work then says whether the directory is
+      # real. A bare vX.Y.Z is the whole repository.
       - name: Resolve the component from the tag
         id: component
         shell: bash
@@ -103,11 +103,11 @@ jobs:
           mkdir -p dist
 
           case "${DIR}" in
-            controller/nkectl)
-              make -C controller/nkectl build-cross DIST="${GITHUB_WORKSPACE}/dist"
+            cli)
+              make -C cli build-cross DIST="${GITHUB_WORKSPACE}/dist"
               # Shipped beside the binaries because nkectl is redistributed --
               # which is the reason it carries its own attribution at all.
-              cp controller/nkectl/THIRD_PARTY_NOTICES.md dist/
+              cp cli/THIRD_PARTY_NOTICES.md dist/
               ;;
             *)
               echo "No artifacts defined for '${DIR:-<repository>}'; releasing notes only."
@@ -129,8 +129,8 @@ jobs:
         shell: bash
         env:
           # The resolved version, not the raw ref. CHANGELOG.md headings carry
-          # neither the "v" nor the module prefix, so `controller/nkectl/v0.1.0`
-          # read raw would look for "## [controller/nkectl/v0.1.0]" and match
+          # neither the "v" nor the module prefix, so `cli/v0.1.0` read raw
+          # would look for "## [cli/v0.1.0]" and match
           # nothing. That does not fail -- the fallback fires -- so the release
           # would quietly ship a one-line body.
           VERSION: ${{ steps.component.outputs.version }}

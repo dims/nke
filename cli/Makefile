@@ -31,21 +31,14 @@ GOLANGCI_LINT_VERSION ?= v2.12.2
 # derives an agent version with an unmatched `git describe` and already
 # produces the wrong string.
 #
-# nkectl versions apart from the controller it sits under, so it gets its own tag
-# family. No nkectl/v* tag exists yet, hence the fallbacks: a plain v* tag, the
-# commit, then v0.0.0. The prefix is stripped, so the binary reports v1.2.3, not
-# nkectl/v1.2.3. --dirty marks a build from a modified tree.
-#
-# Without the commit step, every nkectl reports v0.0.0, because neither tag
-# family exists. The commit says which source the build came from, and leaves
-# v0.0.0 to mean a build outside a git checkout. Same steps as cmd_version in the
-# root Makefile.
-# The tag prefix is the module's own directory, because that is what Go requires
-# of a submodule: this module is github.com/NVIDIA/nke/controller/nkectl, so its
-# tags are controller/nkectl/vX.Y.Z. This matched 'nkectl/v*', which no
-# correctly-formed tag can carry, so the first pattern could never fire.
-_NKECTL_VERSION_RAW := $(shell git describe --tags --dirty --match 'controller/nkectl/v[0-9]*' 2>/dev/null || git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null || git describe --always --dirty 2>/dev/null || echo "v0.0.0")
-NKECTL_VERSION  ?= $(patsubst controller/nkectl/%,%,$(_NKECTL_VERSION_RAW))
+# nkectl versions apart from the controller, so it gets its own tag family. Go
+# requires a submodule's tags to carry its directory, so this module is tagged
+# cli/vX.Y.Z. The prefix is stripped, so the binary reports v1.2.3. No cli/v*
+# tag exists yet, hence the fallbacks: a plain v* tag, the commit, then v0.0.0.
+# The commit says which source a build came from, leaving v0.0.0 to mean a build
+# outside a git checkout. --dirty marks a modified tree.
+_NKECTL_VERSION_RAW := $(shell git describe --tags --dirty --match 'cli/v[0-9]*' 2>/dev/null || git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null || git describe --always --dirty 2>/dev/null || echo "v0.0.0")
+NKECTL_VERSION  ?= $(patsubst cli/%,%,$(_NKECTL_VERSION_RAW))
 NKECTL_COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 NKECTL_TREE     ?= $(shell test -z "$$(git status --porcelain 2>/dev/null)" && echo clean || echo dirty)
 # The commit timestamp, not the wall clock: building the same commit twice
