@@ -133,14 +133,15 @@ license: ## Ensure license headers at code.
 # environment, so one implementation serves every module in the workspace.
 .PHONY: notices notices-check
 notices: ## Regenerate THIRD_PARTY_NOTICES.md for the nkectl binary.
-	@# `go-licenses`, not `bin/go-licenses`: the real rule's target is an
-	@# absolute path, so a relative name does not match it.
-	@$(MAKE) --no-print-directory -C .. go-licenses
+	@# The tool and the script both live in controller/, which is a sibling now,
+	@# not the parent. `go-licenses`, not `bin/go-licenses`: the real rule's
+	@# target is an absolute path, so a relative name does not match it.
+	@$(MAKE) --no-print-directory -C ../controller go-licenses
 	@MODULE_ROOT="$(CURDIR)" \
 		OUTPUT="$(CURDIR)/THIRD_PARTY_NOTICES.md" \
 		PACKAGES="./cmd/nkectl" \
-		GO_LICENSES="$(CURDIR)/../bin/go-licenses" \
-		bash ../hack/generate-notices
+		GO_LICENSES="$(CURDIR)/../controller/bin/go-licenses" \
+		bash ../controller/hack/generate-notices
 
 notices-check: ## Verify THIRD_PARTY_NOTICES.md is up to date.
 	@# git diff says nothing about an untracked path, so check tracking first --

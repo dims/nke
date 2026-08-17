@@ -13,8 +13,8 @@ import (
 	"net/url"
 	"time"
 
-	api "github.com/NVIDIA/nke/controller/api"
 	"github.com/NVIDIA/nke/cli/internal/config"
+	api "github.com/NVIDIA/nke/controller/api"
 )
 
 // CWEClient is a high-level client for the CWE REST API.
