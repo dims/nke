@@ -88,7 +88,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version-file: cli/go.mod
 
       # What each component ships differs, so it is declared rather than guessed.
       # A component with no artifacts still gets a release: the tag and its notes
