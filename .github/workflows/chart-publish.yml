@@ -6,8 +6,11 @@ name: Chart Publish
 # Packages the cloud-workflow-engine Helm chart and publishes it under
 # ghcr.io/nvidia/nke/charts as an OCI artifact:
 #
-#   ghcr.io/nvidia/nke/charts/cloud-workflow-engine:0.1.0          <- release tag
-#   ghcr.io/nvidia/nke/charts/cloud-workflow-engine:0.1.0-4-gabc   <- main between tags
+#   ghcr.io/nvidia/nke/charts/cloud-workflow-engine:0.1.0        <- release tag
+#   ghcr.io/nvidia/nke/charts/cloud-workflow-engine:0.1.0-rc.1   <- release candidate
+#
+# Release tags only. The NVCR mirror in chart-publish-nvcr.yml is the one that
+# also runs on main.
 #
 # `charts/` is a reserved path segment: everything else directly under
 # ghcr.io/nvidia/nke is a payload you pull by name -- the controller image, the
@@ -64,7 +67,14 @@ jobs:
   publish:
     name: Publish chart
     runs-on: ubuntu-latest
-    if: github.repository == 'NVIDIA/nke'
+    # The ref check is not redundant with the `on:` filter above: it also covers
+    # workflow_dispatch, which accepts any ref. Dispatched from main this job
+    # would package something like 0.1.1-rc.0-2-g068156e and point it at
+    # ghcr.io/nvidia/nke/controller:v0.1.1-rc.0-2-g068156e, a tag promotion never
+    # creates -- a chart naming an image that does not exist.
+    if: >-
+      github.repository == 'NVIDIA/nke' &&
+      startsWith(github.ref, 'refs/tags/controller/v')
     timeout-minutes: 10
     permissions:
       contents: read

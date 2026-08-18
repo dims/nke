@@ -12,11 +12,16 @@ deploymentAnnotations: {}
 # This sets the container image.
 # https://kubernetes.io/docs/concepts/containers/images/
 #
-# GHCR, not NVCR: nvcr.io needs an NGC login, so a chart that defaults to it
-# cannot be installed by anyone outside NVIDIA. image-nvcr.yml still builds and
-# pushes to NVCR, then promotes the same digest to GHCR, so this is the same
-# image by a publicly reachable name. Override `image.repository` to go back to
-# the NVCR copy.
+# GHCR, not NVCR. image-nvcr.yml builds and pushes to NVCR, then promotes that
+# same digest to GHCR, so this names the identical image without needing an NGC
+# login. Override `image.repository` to go back to the NVCR copy.
+#
+# ⚠️ This is NOT yet an anonymously pullable image. This repository is
+# `internal`, and a GHCR package inherits that visibility on creation --
+# repository visibility does not change it, and nothing in CI changes it either.
+# Pulling still needs a GitHub token with `read:packages` until someone makes
+# the package public in its own settings. So this removes the NGC dependency; it
+# does not by itself make the chart installable by the public.
 image:
   repository: ghcr.io/nvidia/nke/controller
   # -- This sets the pull policy for images.
