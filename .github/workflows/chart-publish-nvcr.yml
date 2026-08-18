@@ -117,8 +117,15 @@ jobs:
           # who cannot fix it.
           grep -q "^  repository: ${image}\$" "${CHART}/values.yaml" \
             || { echo "::error::image rewrite did not apply"; exit 1; }
-          grep -q "^    repository: nvcr.io/.*/cwe-profiles\$" "${CHART}/values.yaml" \
-            || { echo "::error::profiles image was rewritten and should not be"; exit 1; }
+
+          # The pull secret has to move with the registry. values.yaml ships
+          # `imagePullSecrets: []` because it defaults to ghcr.io, where an NGC
+          # credential is useless; this chart names nvcr.io, so it needs the NGC
+          # one back or every pod it creates lands in ImagePullBackOff.
+          sed -i -e "s#^imagePullSecrets: \[\]\$#imagePullSecrets:\n  - name: svc-nke-ngc-imagepull#" \
+            "${CHART}/values.yaml"
+          grep -q "^  - name: svc-nke-ngc-imagepull\$" "${CHART}/values.yaml" \
+            || { echo "::error::pull-secret rewrite did not apply"; exit 1; }
 
       - name: Package
         shell: bash

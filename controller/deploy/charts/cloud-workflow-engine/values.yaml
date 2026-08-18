@@ -34,8 +34,25 @@ image:
 
 # This is for the secrets for pulling an image from a private repository.
 # https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets:
-  - name: svc-nke-ngc-imagepull
+#
+# Empty, and it has to match image.repository above. This defaulted to
+# `svc-nke-ngc-imagepull`, an NGC credential, which is right for an nvcr.io
+# image and useless for the ghcr.io one this chart now names: kubelet builds its
+# keyring from the secret, finds no ghcr.io entry, falls back to anonymous and
+# gets 401 on an internal package. The pair has to move together or the default
+# install fails everywhere.
+#
+# chart-publish-nvcr.yml puts the NGC secret back when it repoints the image at
+# nvcr.io, so the NVCR-published chart is unchanged for internal consumers.
+#
+# ⚠️ The GHCR package is `internal` today, so you still need a pull secret for
+# it. Create one with a GitHub token that has `read:packages` and set it here:
+#
+#   kubectl create secret docker-registry ghcr-imagepull \
+#     --docker-server=ghcr.io --docker-username=<user> --docker-password=<token>
+#
+#   --set imagePullSecrets[0].name=ghcr-imagepull
+imagePullSecrets: []
 # This is to override the chart name.
 nameOverride: ""
 fullnameOverride: ""
