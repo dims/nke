@@ -349,6 +349,14 @@ profiles:
     # Pointing it at ghcr.io/nvidia/nke would name an image nothing here
     # publishes. Moving it needs a decision in nke-site-deploy first. It is
     # disabled by default, so the chart still renders with no nvcr.io reference.
+    #
+    # ⚠️ If you enable this, you need an NGC pull secret as well as whatever
+    # imagePullSecrets entry the controller image needs -- the two images are in
+    # different registries. imagePullSecrets above is empty by default, so
+    # enabling profiles without adding one puts the init container into
+    # ImagePullBackOff:
+    #
+    #   --set imagePullSecrets[0].name=svc-nke-ngc-imagepull
     enabled: false
     repository: nvcr.io/j7sbcjl3qgta/cwe-profiles
     tag: ""
