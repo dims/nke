@@ -3,11 +3,16 @@
 
 name: Chart Publish
 
-# Packages the cloud-workflow-engine Helm chart and publishes it to
-# ghcr.io/nvidia/nke as an OCI artifact:
+# Packages the cloud-workflow-engine Helm chart and publishes it under
+# ghcr.io/nvidia/nke/charts as an OCI artifact:
 #
-#   ghcr.io/nvidia/nke/cloud-workflow-engine:0.1.0          <- release tag
-#   ghcr.io/nvidia/nke/cloud-workflow-engine:0.1.0-4-gabc   <- main between tags
+#   ghcr.io/nvidia/nke/charts/cloud-workflow-engine:0.1.0          <- release tag
+#   ghcr.io/nvidia/nke/charts/cloud-workflow-engine:0.1.0-4-gabc   <- main between tags
+#
+# `charts/` is a reserved path segment: everything else directly under
+# ghcr.io/nvidia/nke is a payload you pull by name -- the controller image, the
+# agent binaries. Without that split a chart and an image end up in one OCI
+# repository, told apart only by whether the tag carries a "v".
 #
 # Chart version: git describe output with the "controller/" prefix and leading
 # "v" stripped (OCI chart tags carry no "v" prefix by convention).
@@ -114,5 +119,5 @@ jobs:
           set -euo pipefail
           helm push \
             "${RUNNER_TEMP}/chart-dist/cloud-workflow-engine-${VERSION}.tgz" \
-            oci://ghcr.io/nvidia/nke
-          echo "Pushed ghcr.io/nvidia/nke/cloud-workflow-engine:${VERSION}"
+            oci://ghcr.io/nvidia/nke/charts
+          echo "Pushed ghcr.io/nvidia/nke/charts/cloud-workflow-engine:${VERSION}"
