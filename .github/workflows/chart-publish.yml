@@ -22,10 +22,16 @@ name: Chart Publish
 # The nvcr.io mirror lives in chart-publish-nvcr.yml; this workflow uses only
 # the GITHUB_TOKEN and needs no secrets or environments.
 
+# Release tags only, unlike the NVCR mirror which also runs on main.
+#
+# The chart names the GHCR controller image, and image-nvcr.yml promotes to
+# GHCR only for release tags -- NVCR gets every main commit, GHCR does not. A
+# chart built from main would therefore carry an appVersion like
+# v0.1.0-4-gabcdef and point at ghcr.io/nvidia/nke/controller:v0.1.0-4-gabcdef,
+# which does not exist. Publishing only what the image side publishes keeps the
+# two in step.
 on:
   push:
-    branches:
-      - main
     tags:
       - "controller/v[0-9]+.[0-9]+.[0-9]+"
       - "controller/v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
@@ -88,6 +94,28 @@ jobs:
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "app_version=${describe}" >> "${GITHUB_OUTPUT}"
           echo "Chart version: ${version}  appVersion: ${describe}"
+
+      # values.yaml already defaults to this image, so the rewrite is normally a
+      # no-op. It is here so the packaged chart cannot silently inherit a
+      # different default if someone edits values.yaml, and so this job states
+      # which registry it publishes for rather than relying on a file it does
+      # not own.
+      - name: Point the chart at the GHCR image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/nvidia/nke/controller"
+
+          # Anchored at exactly two spaces so this hits image.repository and
+          # NOT profiles.image.repository, which is nested one level deeper and
+          # names an image nke-site-deploy builds.
+          sed -i -e "s#^  repository: .*#  repository: ${image}#" \
+            "${CHART}/values.yaml"
+
+          grep -q "^  repository: ${image}\$" "${CHART}/values.yaml" \
+            || { echo "::error::image rewrite did not apply"; exit 1; }
+          grep -q "^    repository: nvcr.io/.*/cwe-profiles\$" "${CHART}/values.yaml" \
+            || { echo "::error::profiles image was rewritten and should not be"; exit 1; }
 
       - name: Package
         shell: bash
