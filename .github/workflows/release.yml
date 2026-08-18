@@ -127,6 +127,12 @@ jobs:
               # which is the reason it carries its own attribution at all.
               cp cli/THIRD_PARTY_NOTICES.md dist/
               ;;
+            controller)
+              # The controller ships as an image, so a release carries no
+              # binary. It does carry the attribution for what is inside that
+              # image, which is otherwise only readable by pulling it.
+              cp controller/THIRD_PARTY_NOTICES.md dist/
+              ;;
             *)
               echo "No artifacts defined for '${DIR:-<repository>}'; releasing notes only."
               ;;
