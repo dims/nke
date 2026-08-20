@@ -4,7 +4,7 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/NVIDIA/nke/cli/internal/bootstrap"
 	"github.com/NVIDIA/nke/cli/internal/inventory"
 )
 
@@ -110,10 +111,10 @@ func runBootstrapSite(opts *bootstrapSiteOptions) error {
 		return nil
 	}
 
-	// Step 2+ (subsequent tickets): start the ephemeral bootstrap engine and
-	// dispatch the init/join/untaint workflows. Stubbed for now so the command
-	// is runnable end-to-end while the bootstrap core is ported.
-	return errors.New("bootstrap dispatch is not yet implemented; re-run with --dry-run to validate the inventory")
+	// Drive the node agents directly. Every step a bootstrap needs is already an
+	// RPC the agent serves, so there is no intermediate engine to install, no
+	// registry credential to supply, and nothing to tear down afterwards.
+	return bootstrap.Run(context.Background(), inv, bootstrap.Options{Logger: logger})
 }
 
 // dumpInventory prints the loaded, defaulted inventory as YAML so the operator

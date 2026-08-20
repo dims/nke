@@ -8,16 +8,23 @@ require (
 	github.com/oapi-codegen/runtime v1.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	google.golang.org/grpc v1.83.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
+	golang.org/x/net v0.57.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
+)
+
+require (
+	github.com/NVIDIA/nke/agent v0.0.0-00010101000000-000000000000
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/getkin/kin-openapi v0.146.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
@@ -36,3 +43,5 @@ require (
 )
 
 replace github.com/NVIDIA/nke/controller/api => ../controller/api
+
+replace github.com/NVIDIA/nke/agent => ../agent
