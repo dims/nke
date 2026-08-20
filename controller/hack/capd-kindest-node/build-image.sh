@@ -102,8 +102,8 @@ assemble_spire_bundle_from_upstream() {
      "${root}/bin/tpm_attestor_agent"
   chmod 0755 "${root}/bin/spire-agent" "${root}/bin/tpm_attestor_agent"
 
-  cp "${script_dir}/spire-agent/install.sh" "${root}/install.sh"
-  cp "${script_dir}/spire-agent/spire-agent.service" "${root}/spire-agent.service"
+  cp "${repo_root}/hack/ci/assets/spire-agent-install.sh" "${root}/install.sh"
+  cp "${repo_root}/hack/ci/assets/spire-agent.service" "${root}/spire-agent.service"
   chmod 0755 "${root}/install.sh"
 
   # The agent config resolves ${TPM_PLUGIN_CHECKSUM}; SPIRE verifies the plugin
