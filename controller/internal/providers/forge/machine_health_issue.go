@@ -82,14 +82,23 @@ func toForgeSDKMachineHealthIssue(m *MachineHealthIssue) *forgesdk.MachineHealth
 		return nil
 	}
 
-	result := &forgesdk.MachineHealthIssue{
+	// `details` is optional for us and REQUIRED by the SDK, which emits the
+	// field unconditionally in ToMap. Leaving it unset therefore sends
+	// `"details": null`, and the SDK's own decoder rejects that with
+	//   no value given for required property details
+	// so the server answers 400 and node teardown fails. An absent key is
+	// rejected the same way; only an empty string is accepted. Send that when
+	// we have nothing, which is also the truthful encoding of "no details".
+	details := ""
+	if m.Details != nil {
+		details = *m.Details
+	}
+
+	return &forgesdk.MachineHealthIssue{
 		Category: m.Category,
 		Summary:  *forgesdk.NewNullableString(&m.Summary),
+		Details:  *forgesdk.NewNullableString(&details),
 	}
-	if m.Details != nil {
-		result.Details = *forgesdk.NewNullableString(m.Details)
-	}
-	return result
 }
 
 // NewMachineHealthIssueFromJSON creates a MachineHealthIssue from JSON data,
