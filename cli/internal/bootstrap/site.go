@@ -61,7 +61,7 @@ func Run(ctx context.Context, inv *inventory.Inventory, opts Options) error {
 
 	port := inv.Cluster.NodeAgentPort
 	if port == "" {
-		port = "50051"
+		port = inventory.DefaultNodeAgentPort
 	}
 
 	// Connect to every node before changing anything. A typo in an IP should

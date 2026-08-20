@@ -284,15 +284,17 @@ func TestLoadEnvOverridesFile(t *testing.T) {
 }
 
 func TestLoadEnvFillsField(t *testing.T) {
-	// validYAML sets no nodeAgentPort; the env var supplies it.
-	t.Setenv("CLUSTER_NODE_AGENT_PORT", "15005")
+	// validYAML sets no nodeAgentPort; the env var supplies it. The value must
+	// differ from DefaultNodeAgentPort, or the assertion passes either way.
+	const port = "16005"
+	t.Setenv("CLUSTER_NODE_AGENT_PORT", port)
 
 	inv, err := Load(writeTemp(t, validYAML))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if inv.Cluster.NodeAgentPort != "15005" {
-		t.Errorf("NodeAgentPort = %q, want env value %q", inv.Cluster.NodeAgentPort, "15005")
+	if inv.Cluster.NodeAgentPort != port {
+		t.Errorf("NodeAgentPort = %q, want env value %q", inv.Cluster.NodeAgentPort, port)
 	}
 }
 

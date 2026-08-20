@@ -38,7 +38,7 @@ cluster:
   # Service network CIDR.
   serviceCidr: "10.200.0.0/16"
 
-  # Optional: gRPC port nke-agent listens on. Defaults to "50051".
+  # Optional: gRPC port nke-agent listens on. Defaults to "15005".
   # nodeAgentPort: "15005"
 
   # Optional kubelet reservations applied before kubeadm init/join.
