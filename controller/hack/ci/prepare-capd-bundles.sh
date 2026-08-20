@@ -23,13 +23,18 @@ download_verified() {
   local sha256=$2
   local destination=$3
 
+  # Abort a stalled transfer, not a slow one. The SPIRE archive is 56 MiB, which
+  # no fixed --max-time can cover on both a CI runner and a laptop on a slow
+  # link. --speed-limit gives up only when throughput stays under 1 KiB/s for
+  # 30 seconds, so a slow download finishes and a dead one still fails fast.
   curl \
     --fail \
     --silent \
     --show-error \
     --location \
     --connect-timeout 10 \
-    --max-time 30 \
+    --speed-limit 1024 \
+    --speed-time 30 \
     --retry 3 \
     --retry-delay 5 \
     --retry-connrefused \
