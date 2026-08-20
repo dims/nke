@@ -43,10 +43,16 @@ type Options struct {
 
 // Run bootstraps the cluster described by inv.
 //
-// The sequence is preflight every node, init the first control-plane node, read
-// the join command from it, then join the rest. Each step is verified against
-// the agent before the next begins, so a failure names the node and the phase it
-// failed in.
+// The sequence is init the first control-plane node, read the join command from
+// it, then join the rest. Each step is verified against the agent before the
+// next begins, so a failure names the node and the phase it failed in.
+//
+// There is no separate preflight step. The agent's ExecuteNodePreflight either
+// runs caller-supplied file checks, which the inventory does not describe, or
+// runs "kubeadm phase preflight" against a rendered kubeadm config, which is the
+// renderer this command deliberately avoids. kubeadm runs its own preflight
+// checks at the start of init and join, on each node, before it changes that
+// node, so the same guarantee holds.
 func Run(ctx context.Context, inv *inventory.Inventory, opts Options) error {
 	log := opts.Logger
 	if log == nil {
@@ -70,10 +76,6 @@ func Run(ctx context.Context, inv *inventory.Inventory, opts Options) error {
 			c.Close()
 		}
 	}()
-
-	if err := preflight(ctx, append([]*agentConn{initConn}, joinConns...), log); err != nil {
-		return err
-	}
 
 	if err := initControlPlane(ctx, initConn, inv, log); err != nil {
 		return err
@@ -125,24 +127,6 @@ func dialAll(ctx context.Context, inv *inventory.Inventory, port string, log *sl
 	return initConn, joins, nil
 }
 
-// preflight asks every agent to check its own host before anything is changed.
-func preflight(ctx context.Context, conns []*agentConn, log *slog.Logger) error {
-	for _, c := range conns {
-		log.Info("running node preflight", "node", c.name)
-		resp, err := c.client.ExecuteNodePreflight(ctx, &pb.ExecuteNodePreflightRequest{})
-		if err != nil {
-			return fmt.Errorf("node %s: preflight: %w", c.name, err)
-		}
-		if strings.EqualFold(resp.GetStatus(), statusError) {
-			return fmt.Errorf("node %s: preflight failed: %s", c.name, resp.GetErrorMessage())
-		}
-		for _, r := range resp.GetResults() {
-			log.Debug("preflight check", "node", c.name, "check", r.String())
-		}
-	}
-	return nil
-}
-
 // initControlPlane runs kubeadm init on the first control-plane node and waits
 // for both kubeadm and the CNI to report ready.
 func initControlPlane(ctx context.Context, c *agentConn, inv *inventory.Inventory, log *slog.Logger) error {
@@ -176,8 +160,14 @@ func initControlPlane(ctx context.Context, c *agentConn, inv *inventory.Inventor
 		"serviceCidr", req.ServiceCidr,
 		"cni", inv.Cluster.CniName)
 
-	if _, err := c.client.ExecuteKubeadmInit(ctx, req); err != nil {
+	// The agent reports a rejected request in the response body rather than as a
+	// gRPC error, so a nil err alone does not mean the init was accepted.
+	resp, err := c.client.ExecuteKubeadmInit(ctx, req)
+	if err != nil {
 		return fmt.Errorf("node %s: kubeadm init: %w", c.name, err)
+	}
+	if strings.EqualFold(resp.GetStatus(), statusError) {
+		return fmt.Errorf("node %s: agent rejected kubeadm init: %s", c.name, resp.GetErrorMessage())
 	}
 
 	return waitForKubeadm(ctx, c, phaseInit, true, initTimeout, log)
@@ -202,10 +192,14 @@ func controlPlaneJoinCommand(ctx context.Context, c *agentConn, log *slog.Logger
 // joinControlPlane joins one node and waits for it to report ready.
 func joinControlPlane(ctx context.Context, c *agentConn, joinCmd string, log *slog.Logger) error {
 	log.Info("running kubeadm join", "node", c.name)
-	if _, err := c.client.ExecuteKubeadmJoin(ctx, &pb.KubeadmJoinRequest{
+	resp, err := c.client.ExecuteKubeadmJoin(ctx, &pb.KubeadmJoinRequest{
 		KubeadmJoinString: joinCmd,
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("node %s: kubeadm join: %w", c.name, err)
+	}
+	if strings.EqualFold(resp.GetStatus(), statusError) {
+		return fmt.Errorf("node %s: agent rejected kubeadm join: %s", c.name, resp.GetErrorMessage())
 	}
 	return waitForKubeadm(ctx, c, phaseJoin, false, joinTimeout, log)
 }

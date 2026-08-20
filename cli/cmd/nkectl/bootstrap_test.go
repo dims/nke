@@ -71,23 +71,28 @@ registry:
 	if err == nil {
 		t.Fatal("invalid inventory did not error")
 	}
-	if strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("reached dispatch stub before validation failed: %v", err)
+	if strings.Contains(err.Error(), "node agent") {
+		t.Errorf("contacted a node before validation failed: %v", err)
 	}
 	if !strings.Contains(err.Error(), "cluster.initNode.ip") {
 		t.Errorf("error does not name the bad field: %v", err)
 	}
 }
 
-// TestRunBootstrapSiteValidReachesStub confirms a valid inventory (no dry-run)
-// passes validation and reaches the not-yet-implemented dispatch stub.
-func TestRunBootstrapSiteValidReachesStub(t *testing.T) {
+// TestRunBootstrapSiteValidDispatches confirms a valid inventory (no dry-run)
+// passes validation and goes on to contact the node agents. The example
+// inventory names an address nothing serves, so the run stops there, which is
+// the first thing that happens after validation.
+func TestRunBootstrapSiteValidDispatches(t *testing.T) {
 	err := runBootstrapSite(&bootstrapSiteOptions{inventory: writeInventory(t, validInventory)})
 	if err == nil {
-		t.Fatal("expected the dispatch stub error")
+		t.Fatal("expected a connection error from the unreachable node agent")
 	}
-	if !strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("expected dispatch stub error, got: %v", err)
+	if !strings.Contains(err.Error(), "node1") {
+		t.Errorf("error does not name the node it could not reach: %v", err)
+	}
+	if !strings.Contains(err.Error(), "did not answer") {
+		t.Errorf("expected a node agent connection error, got: %v", err)
 	}
 }
 
