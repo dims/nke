@@ -101,8 +101,63 @@ func (s *NodeAgentServer) applyTigeraManifestOverrides(path, operatorManifest, r
 		if err := os.WriteFile(resourceManifestPath, []byte(resourceManifest), 0o644); err != nil {
 			return fmt.Errorf("failed to write custom resource manifest file: %w", err)
 		}
+		return nil
 	}
 
+	// No override was supplied, so the bundle's own custom-resources.yaml is
+	// used. Upstream Calico ships it with a fixed 192.168.0.0/16 IP pool, which
+	// the operator rejects on any cluster with a different pod CIDR:
+	//
+	//	IPPool 192.168.0.0/16 is not within the platform's configured pod
+	//	network CIDR(s) [10.244.0.0/16]
+	//
+	// The operator derives the pool from the cluster's own pod CIDR when the
+	// Installation names no pools, so drop them and let it do that.
+	return dropInstallationIPPools(filepath.Join(path, "manifests", "custom-resources.yaml"))
+}
+
+// dropInstallationIPPools removes spec.calicoNetwork.ipPools from every
+// Installation in a Calico custom-resources manifest, leaving the rest of the
+// file, and any other document in it, untouched.
+func dropInstallationIPPools(manifestPath string) error {
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("failed to read custom resource manifest file: %w", err)
+	}
+
+	docs := strings.Split(string(raw), "\n---")
+	changed := false
+	for i, doc := range docs {
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(doc), &parsed); err != nil {
+			// A document this agent cannot parse is one it must not rewrite.
+			slog.Warn("skipping unparsable document in custom-resources.yaml", "error", err)
+			continue
+		}
+		if kind, _ := parsed["kind"].(string); kind != "Installation" {
+			continue
+		}
+		spec, _ := parsed["spec"].(map[any]any)
+		network, _ := spec["calicoNetwork"].(map[any]any)
+		if _, ok := network["ipPools"]; !ok {
+			continue
+		}
+		delete(network, "ipPools")
+		out, err := yaml.Marshal(parsed)
+		if err != nil {
+			return fmt.Errorf("failed to render custom resource manifest file: %w", err)
+		}
+		docs[i] = "\n" + string(out)
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+
+	slog.Info("removed the fixed IP pool from the Calico Installation, the operator will use the cluster pod CIDR")
+	if err := os.WriteFile(manifestPath, []byte(strings.Join(docs, "\n---")), 0o644); err != nil {
+		return fmt.Errorf("failed to write custom resource manifest file: %w", err)
+	}
 	return nil
 }
 

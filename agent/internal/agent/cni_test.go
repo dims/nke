@@ -14,6 +14,7 @@ import (
 	pb "github.com/NVIDIA/nke/agent/pkg/agent/proto"
 	nkeutils "github.com/NVIDIA/nke/agent/pkg/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Sample kubeconfig YAML for testing
@@ -688,4 +689,83 @@ func TestBundleStatusInitialization(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, status)
 		})
 	}
+}
+
+// upstreamCustomResources is the manifest Calico ships, trimmed to the parts
+// that matter here: an Installation with a fixed IP pool, and other documents
+// the rewrite must leave alone.
+const upstreamCustomResources = `# This section includes base Calico installation configuration.
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # Configures Calico networking.
+  calicoNetwork:
+    ipPools:
+    - name: default-ipv4-ippool
+      blockSize: 26
+      cidr: 192.168.0.0/16
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+
+---
+
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
+
+---
+
+apiVersion: operator.tigera.io/v1
+kind: Whisker
+metadata:
+  name: default
+`
+
+func TestDropInstallationIPPools(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "custom-resources.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(upstreamCustomResources), 0o644))
+
+	require.NoError(t, dropInstallationIPPools(path))
+
+	out, err := os.ReadFile(path)
+	require.NoError(t, err)
+	got := string(out)
+
+	// The pool is what the operator rejects on a cluster with a different pod
+	// CIDR, so it is the one thing that must be gone.
+	assert.NotContains(t, got, "192.168.0.0/16")
+	assert.NotContains(t, got, "ipPools")
+
+	// Everything else must survive: the Installation itself, its other
+	// networking settings, and the documents that follow it.
+	assert.Contains(t, got, "kind: Installation")
+	assert.Contains(t, got, "calicoNetwork")
+	assert.Contains(t, got, "kind: APIServer")
+	assert.Contains(t, got, "kind: Whisker")
+	assert.Equal(t, 2, strings.Count(got, "\n---"), "document separators must be preserved")
+}
+
+func TestDropInstallationIPPoolsLeavesAManifestWithoutPoolsAlone(t *testing.T) {
+	const noPools = `apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    bgp: Disabled
+`
+	path := filepath.Join(t.TempDir(), "custom-resources.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(noPools), 0o644))
+
+	require.NoError(t, dropInstallationIPPools(path))
+
+	out, err := os.ReadFile(path)
+	require.NoError(t, err)
+	// Untouched, comments and formatting included.
+	assert.Equal(t, noPools, string(out))
 }
