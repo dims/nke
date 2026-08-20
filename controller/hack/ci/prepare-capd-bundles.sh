@@ -66,7 +66,10 @@ printf 'TPM_PLUGIN_CHECKSUM=%s\n' "$(sha256sum "${spire_bundle}/bin/tpm_attestor
   >"${spire_bundle}/spire-agent.env"
 tar -czf "${OUTPUT_DIR}/spire-agent.tgz" -C "${TMP_DIR}" "${spire_bundle_name}"
 
-calico_bundle_name="calico_v${CALICO_VERSION}_amd64"
+# The Calico bundle holds manifests and an installer, so it runs anywhere. The
+# index entry below labels it "na", which the agent matches on every
+# architecture, and the name says so too.
+calico_bundle_name="calico_v${CALICO_VERSION}_na"
 calico_bundle="${TMP_DIR}/${calico_bundle_name}"
 mkdir -p "${calico_bundle}/manifests"
 download_verified \
@@ -123,7 +126,7 @@ cat >"${OUTPUT_DIR}/index.json" <<EOF
   "calico": {
     "entries": [
       {
-        "arch": "amd64",
+        "arch": "na",
         "path": "${calico_bundle_name}.tgz",
         "version": "${CALICO_VERSION}"
       }
