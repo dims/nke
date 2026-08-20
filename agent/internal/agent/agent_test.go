@@ -1461,3 +1461,20 @@ func TestInstallCollectionJSONRequiresIndex(t *testing.T) {
 	assert.Contains(t, err.Error(), "bundle index not configured")
 }
 
+func TestKubeadmJoinArgsDropsTheBinaryName(t *testing.T) {
+	// The join string comes straight out of kubeadm, so it names the binary.
+	// The agent supplies the binary itself and must not pass it twice.
+	got := kubeadmJoinArgs(
+		"kubeadm join 10.0.0.1:6443 --token abcdef.0123456789abcdef --control-plane",
+	)
+	assert.Equal(t, []string{
+		"join", "10.0.0.1:6443", "--token", "abcdef.0123456789abcdef", "--control-plane",
+	}, got)
+
+	// A caller that already stripped it, as the controller does, still works.
+	assert.Equal(t, []string{"join", "10.0.0.1:6443"},
+		kubeadmJoinArgs("  join   10.0.0.1:6443  "))
+
+	assert.Empty(t, kubeadmJoinArgs(""))
+	assert.Empty(t, kubeadmJoinArgs("kubeadm"))
+}

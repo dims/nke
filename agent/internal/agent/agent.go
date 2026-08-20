@@ -446,6 +446,20 @@ func pinnedKubernetesVersionForCLIInit(req *pb.KubeadmInitRequest) string {
 	return canonicalKubernetesVersion(kVer)
 }
 
+// kubeadmJoinArgs splits a join command into arguments for the kubeadm binary.
+//
+// The join string a caller gets from kubeadm init, or from
+// "kubeadm token create --print-join-command", starts with the word "kubeadm".
+// The agent supplies the binary name itself, so the leading word is dropped
+// here. Without that, the agent runs "kubeadm kubeadm join ...", which fails.
+func kubeadmJoinArgs(joinString string) []string {
+	args := strings.Fields(joinString)
+	if len(args) > 0 && args[0] == "kubeadm" {
+		args = args[1:]
+	}
+	return args
+}
+
 // Server logic
 func (s *NodeAgentServer) ExecuteKubeadmJoin(
 	ctx context.Context,
@@ -491,7 +505,7 @@ func (s *NodeAgentServer) ExecuteKubeadmJoin(
 	// Persist what we have so far
 	s.Persister.Persist(&statusCopy) //nolint:all
 
-	args := strings.Fields(req.KubeadmJoinString) //[1:]
+	args := kubeadmJoinArgs(req.KubeadmJoinString)
 	slog.Info("issuing kubeadm join command", "args", args)
 	go s.processKubeadmJoin(args, req)
 	return response, nil
