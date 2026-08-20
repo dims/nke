@@ -445,11 +445,11 @@ func registerTemporalNamespaceWithRetry(ctx context.Context, cfg config.Config, 
 	)
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		if err := temporal.RegisterNamespace(ctx, cfg, temporalLogger); err == nil {
+		err := temporal.RegisterNamespace(ctx, cfg, temporalLogger)
+		if err == nil {
 			return nil
-		} else {
-			lastErr = err
 		}
+		lastErr = err
 		if attempt == attempts {
 			break
 		}
