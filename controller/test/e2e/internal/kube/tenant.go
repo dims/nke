@@ -49,7 +49,11 @@ const (
 	spireServerInstanceLabel = "spire"
 	spireServerNameLabel     = "server"
 
-	cweSPIFFEPath       = "/nke-service/cloud-workflow-engine"
+	cweSPIFFEPath = "/nke-service/cloud-workflow-engine"
+	// adminSPIFFEPath is bound to cluster-admin in every tenant by the
+	// nke:capi-cluster-admin ClusterRoleBinding the nke-rbac ConfigMap carries.
+	// GetAdminClient mints this rather than widening nke:cwe for test setup.
+	adminSPIFFEPath     = "/nke-service/capi-manager"
 	spireExecPluginName = "k8s-spiffe-workload-jwt-exec-auth"
 	spireAudienceEnv    = "SPIFFE_JWT_AUDIENCE"
 
@@ -106,29 +110,24 @@ func (f *TenantClientFactory) GetClient(ctx context.Context, clusterName string)
 	return newTenantClient(restConfig, clusterName)
 }
 
-// GetAdminClient returns a tenant client from the CAPI admin kubeconfig.
-// Post-ready probes use it to create short-lived workloads without widening the
-// production CWE SPIFFE identity's permissions solely for test setup.
+// GetAdminClient returns a tenant client from the admin kubeconfig TenantAccess
+// publishes. Post-ready probes use it to create short-lived workloads without
+// widening the production CWE SPIFFE identity's permissions for test setup.
+//
+// This read cluster-<name>/<name>-kubeconfig, the CAPI Secret. Nothing writes
+// that any more: provision_cluster gates the legacy publish behind the
+// "tenant-access-sole-publisher" workflow version, and every new cluster is on
+// it, so TenantAccess is the only publisher.
+//
+// With OIDC off TenantAccess publishes the admin kubeconfig itself, and that
+// Secret is used as it stands. With OIDC on it publishes a SPIRE exec-auth
+// kubeconfig for the CWE identity, which is deliberately not an admin
+// credential, so authenticate as adminSPIFFEPath instead. nke:capi-cluster-admin
+// binds that identity to cluster-admin in every tenant.
 func (f *TenantClientFactory) GetAdminClient(ctx context.Context, clusterName string) (client.Client, error) {
-	clusterName = strings.TrimSpace(clusterName)
-	if clusterName == "" {
-		return nil, errors.New("cluster name is required")
-	}
-
-	secretNamespace := "cluster-" + clusterName
-	secretName := clusterName + "-kubeconfig"
-	secret, err := f.coreClient.Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	restConfig, err := f.tenantRESTConfigAs(ctx, clusterName, adminSPIFFEPath)
 	if err != nil {
-		return nil, fmt.Errorf("getting CAPI admin kubeconfig secret %s/%s: %w", secretNamespace, secretName, err)
-	}
-	kubeconfig, ok := secret.Data[tenantKubeconfigKey]
-	if !ok || len(kubeconfig) == 0 {
-		return nil, fmt.Errorf("CAPI admin kubeconfig secret %s/%s has no non-empty %q key", secretNamespace, secretName, tenantKubeconfigKey)
-	}
-
-	restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("parsing CAPI admin kubeconfig for %q: %w", clusterName, err)
+		return nil, err
 	}
 	return newTenantClient(restConfig, clusterName)
 }
@@ -155,6 +154,13 @@ func newTenantClient(restConfig *rest.Config, clusterName string) (client.Client
 }
 
 func (f *TenantClientFactory) tenantRESTConfig(ctx context.Context, clusterName string) (*rest.Config, error) {
+	return f.tenantRESTConfigAs(ctx, clusterName, cweSPIFFEPath)
+}
+
+// tenantRESTConfigAs builds a REST config for a tenant, authenticating as the
+// given SPIFFE path. Endpoint and CA always come from the published kubeconfig;
+// only the identity varies.
+func (f *TenantClientFactory) tenantRESTConfigAs(ctx context.Context, clusterName, spiffePath string) (*rest.Config, error) {
 	clusterName = strings.TrimSpace(clusterName)
 	if clusterName == "" {
 		return nil, errors.New("cluster name is required")
@@ -195,7 +201,7 @@ func (f *TenantClientFactory) tenantRESTConfig(ctx context.Context, clusterName 
 	tenantConfig := rest.AnonymousClientConfig(publishedConfig)
 	tokenSource := newExpiringJWTSource(
 		func(tokenCtx context.Context) (string, error) {
-			return f.mintJWT(tokenCtx, trustDomain, audience)
+			return f.mintJWTAs(tokenCtx, trustDomain, audience, spiffePath)
 		},
 		f.now,
 	)
@@ -236,12 +242,16 @@ func spireAudience(execConfig *clientcmdapi.ExecConfig) (string, error) {
 }
 
 func (f *TenantClientFactory) mintJWT(ctx context.Context, trustDomain, audience string) (string, error) {
+	return f.mintJWTAs(ctx, trustDomain, audience, cweSPIFFEPath)
+}
+
+func (f *TenantClientFactory) mintJWTAs(ctx context.Context, trustDomain, audience, spiffePath string) (string, error) {
 	pod, err := f.readySPIREServerPod(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	spiffeID := "spiffe://" + trustDomain + cweSPIFFEPath
+	spiffeID := "spiffe://" + trustDomain + spiffePath
 	command := []string{
 		"bin/spire-server", "jwt", "mint",
 		"-spiffeID", spiffeID,

@@ -101,6 +101,13 @@ jobs:
             run: make test
           - module: cli
             run: make test
+          # The e2e suite needs a cluster, but its helpers under internal/ are
+          # ordinary unit tests and nothing ran them. That is how GetAdminClient
+          # kept reading a Secret the controller had stopped publishing: the
+          # helper tests asserted the old location and never executed.
+          # ./internal/... only, so the ginkgo suite stays out.
+          - module: controller/test/e2e
+            run: go test ./internal/...
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
