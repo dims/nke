@@ -674,3 +674,66 @@ func (e *fakeExecutor) write(options remotecommand.StreamOptions) error {
 	})
 	return e.err
 }
+
+// The verifier pods shell out to kubectl, which cannot use the SPIRE exec
+// plugin. AdminKubeconfig must hand back a plain token kubeconfig that keeps the
+// published endpoint and CA.
+func TestAdminKubeconfigReplacesSPIREExecWithAMintedToken(t *testing.T) {
+	wantToken := testJWT(time.Now().Add(time.Hour), "minted")
+	factory := newTestTenantClientFactory(t,
+		spireServerConfigMapObject(`{"server":{"trust_domain":"test.nke.local"}}`),
+		spireServerPod("spire-server-1", true, spireServerSelector()),
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: tenantKubeconfigNamespace, Name: "tenant-a-kubeconfig"},
+			Data:       map[string][]byte{tenantKubeconfigKey: testSPIREKubeconfig(t, "tenant-a")},
+		},
+	)
+	var gotURL *url.URL
+	factory.newExecutor = func(_ string, requestURL *url.URL) (remotecommand.Executor, error) {
+		copyURL := *requestURL
+		gotURL = &copyURL
+		return &fakeExecutor{stdout: wantToken + "\n"}, nil
+	}
+
+	rendered, err := factory.AdminKubeconfig(context.Background(), "tenant-a")
+	if err != nil {
+		t.Fatalf("AdminKubeconfig() error = %v", err)
+	}
+	parsed, err := clientcmd.Load(rendered)
+	if err != nil {
+		t.Fatalf("clientcmd.Load() error = %v", err)
+	}
+
+	authInfo := parsed.AuthInfos["admin"]
+	if authInfo == nil || authInfo.Token != wantToken {
+		t.Fatalf("rendered token = %#v, want the minted JWT", authInfo)
+	}
+	if authInfo.Exec != nil {
+		t.Fatal("rendered kubeconfig still carries an exec plugin")
+	}
+	cluster := parsed.Clusters["tenant"]
+	if cluster == nil || cluster.Server != "https://tenant.example:6443" || string(cluster.CertificateAuthorityData) != "tenant-ca" {
+		t.Fatalf("rendered cluster = %#v, want the published endpoint and CA", cluster)
+	}
+	if want := "spiffe://test.nke.local" + adminSPIFFEPath; !slices.Contains(gotURL.Query()["command"], want) {
+		t.Fatalf("AdminKubeconfig() did not mint %q", want)
+	}
+}
+
+// A non-SPIRE kubeconfig already carries a usable credential and must be handed
+// back untouched, so an OIDC-off cluster keeps working.
+func TestAdminKubeconfigPassesThroughANonSPIREKubeconfig(t *testing.T) {
+	published := testClientKubeconfig(t)
+	factory := newTestTenantClientFactory(t, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: tenantKubeconfigNamespace, Name: "tenant-a-kubeconfig"},
+		Data:       map[string][]byte{tenantKubeconfigKey: published},
+	})
+
+	rendered, err := factory.AdminKubeconfig(context.Background(), "tenant-a")
+	if err != nil {
+		t.Fatalf("AdminKubeconfig() error = %v", err)
+	}
+	if string(rendered) != string(published) {
+		t.Fatal("AdminKubeconfig() rewrote a kubeconfig that needed no change")
+	}
+}

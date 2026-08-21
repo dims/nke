@@ -84,7 +84,7 @@ func validateEtcdEncryptionConfiguration(test *tenantTest) {
 		Expect(validateKubeadmEncryptionConfig(ctx, tenantClient)).To(Succeed())
 
 		By("Verifying a Secret is encrypted in raw etcd")
-		Expect(runEtcdEncryptionVerifier(ctx, test.k8sClient, test.cluster.Name)).To(Succeed())
+		Expect(runEtcdEncryptionVerifier(ctx, test.k8sClient, adminKubeconfigSecret(ctx, test))).To(Succeed())
 	}, Label("lifecycle", "encryption"), NodeTimeout(15*time.Minute))
 }
 
@@ -103,7 +103,7 @@ func validateEtcdEncryptionKeyRotation(test *tenantTest) {
 
 		beforeKey := expectSucceed(readEtcdEncryptionKeyState(ctx, test.k8sClient, test.cluster.ID.String()))
 		Expect(beforeKey.pending).To(BeFalse(), "a pending key should not exist before rotation")
-		beforeRestarts := expectSucceed(readKubeAPIServerRestartCounts(ctx, test.k8sClient, test.cluster.Name))
+		beforeRestarts := expectSucceed(readKubeAPIServerRestartCounts(ctx, test.k8sClient, adminKubeconfigSecret(ctx, test)))
 
 		By("Starting the operator-only Temporal workflow")
 		workflowID := expectSucceed(runEtcdEncryptionKeyRotation(ctx, test.k8sClient, test.cluster.ID.String()))
@@ -122,7 +122,7 @@ func validateEtcdEncryptionKeyRotation(test *tenantTest) {
 		test.cluster = cluster
 
 		By("Verifying the configuration update did not restart kube-apiserver")
-		afterRestarts := expectSucceed(readKubeAPIServerRestartCounts(ctx, test.k8sClient, test.cluster.Name))
+		afterRestarts := expectSucceed(readKubeAPIServerRestartCounts(ctx, test.k8sClient, adminKubeconfigSecret(ctx, test)))
 		Expect(afterRestarts).To(Equal(beforeRestarts))
 		Expect(test.nke.AssertNodeConditions(
 			ctx,
@@ -132,7 +132,7 @@ func validateEtcdEncryptionKeyRotation(test *tenantTest) {
 		)).To(Succeed())
 
 		By("Verifying Secrets remain encrypted in raw etcd after rotation")
-		Expect(runEtcdEncryptionVerifier(ctx, test.k8sClient, test.cluster.Name)).To(Succeed())
+		Expect(runEtcdEncryptionVerifier(ctx, test.k8sClient, adminKubeconfigSecret(ctx, test))).To(Succeed())
 	}, Label("encryption", "etcd-key-rotation"), NodeTimeout(20*time.Minute))
 }
 
@@ -199,7 +199,7 @@ func readEtcdEncryptionKeyState(
 	}, nil
 }
 
-func readKubeAPIServerRestartCounts(ctx context.Context, c client.Client, clusterName string) (string, error) {
+func readKubeAPIServerRestartCounts(ctx context.Context, c client.Client, kubeconfigSecret string) (string, error) {
 	namespace := "nke-system"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -221,7 +221,7 @@ func readKubeAPIServerRestartCounts(ctx context.Context, c client.Client, cluste
 			Volumes: []corev1.Volume{{
 				Name: "kubeconfig",
 				VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-					SecretName: clusterName + "-kubeconfig",
+					SecretName: kubeconfigSecret,
 				}},
 			}},
 		},
@@ -404,7 +404,32 @@ func kubeadmArgValue(value any) (string, bool) {
 	}
 }
 
-func runEtcdEncryptionVerifier(ctx context.Context, c client.Client, clusterName string) error {
+// adminKubeconfigSecret writes a short-lived Secret holding a kubeconfig the
+// verifier pods can actually use, and returns its name.
+//
+// The published <cluster>-kubeconfig cannot be mounted directly: on an OIDC
+// cluster it authenticates through the SPIRE exec plugin, which is not in the
+// kubectl image and needs a Workload API socket the pod does not have. kubectl
+// then fails with no message, which is how these two specs failed.
+func adminKubeconfigSecret(ctx context.Context, test *tenantTest) string {
+	GinkgoHelper()
+
+	kubeconfig := expectSucceed(test.tenantClients.AdminKubeconfig(ctx, test.cluster.Name))
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "e2e-admin-kubeconfig-",
+			Namespace:    "nke-system",
+		},
+		Data: map[string][]byte{"value": kubeconfig},
+	}
+	Expect(test.k8sClient.Create(ctx, secret)).To(Succeed(), "should create the verifier kubeconfig secret")
+	DeferCleanup(func(ctx context.Context) {
+		_ = test.k8sClient.Delete(ctx, secret)
+	})
+	return secret.Name
+}
+
+func runEtcdEncryptionVerifier(ctx context.Context, c client.Client, kubeconfigSecret string) error {
 	namespace := "nke-system"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -426,7 +451,7 @@ func runEtcdEncryptionVerifier(ctx context.Context, c client.Client, clusterName
 			Volumes: []corev1.Volume{{
 				Name: "kubeconfig",
 				VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-					SecretName: clusterName + "-kubeconfig",
+					SecretName: kubeconfigSecret,
 				}},
 			}},
 		},

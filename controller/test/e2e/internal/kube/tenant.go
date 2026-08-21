@@ -212,6 +212,90 @@ func (f *TenantClientFactory) tenantRESTConfigAs(ctx context.Context, clusterNam
 	return tenantConfig, nil
 }
 
+// AdminKubeconfig returns a self-contained admin kubeconfig for a tenant,
+// suitable for mounting into a pod that shells out to kubectl.
+//
+// The published kubeconfig cannot be used directly on an OIDC cluster: it
+// authenticates through the SPIRE exec plugin, which is not in the kubectl image
+// and needs a Workload API socket the pod does not have. kubectl then fails with
+// no useful message. This keeps the endpoint and CA and swaps the credential for
+// a minted cluster-admin JWT.
+//
+// The token is fixed at call time, so use it promptly and do not cache it.
+func (f *TenantClientFactory) AdminKubeconfig(ctx context.Context, clusterName string) ([]byte, error) {
+	clusterName = strings.TrimSpace(clusterName)
+	if clusterName == "" {
+		return nil, errors.New("cluster name is required")
+	}
+
+	secretName := clusterName + "-kubeconfig"
+	secret, err := f.coreClient.Secrets(tenantKubeconfigNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("getting tenant kubeconfig secret %s/%s: %w", tenantKubeconfigNamespace, secretName, err)
+	}
+	published, ok := secret.Data[tenantKubeconfigKey]
+	if !ok || len(published) == 0 {
+		return nil, fmt.Errorf("tenant kubeconfig secret %s/%s has no non-empty %q key", tenantKubeconfigNamespace, secretName, tenantKubeconfigKey)
+	}
+
+	parsed, err := clientcmd.Load(published)
+	if err != nil {
+		return nil, fmt.Errorf("parsing tenant kubeconfig for %q: %w", clusterName, err)
+	}
+
+	var exec *clientcmdapi.ExecConfig
+	for _, authInfo := range parsed.AuthInfos {
+		if authInfo != nil && isSPIREExecConfig(authInfo.Exec) {
+			exec = authInfo.Exec
+			break
+		}
+	}
+	// Not a SPIRE kubeconfig, so it already carries a usable credential.
+	if exec == nil {
+		return published, nil
+	}
+
+	audience, err := spireAudience(exec)
+	if err != nil {
+		return nil, fmt.Errorf("reading SPIRE JWT audience from tenant kubeconfig for %q: %w", clusterName, err)
+	}
+	trustDomain, err := f.managementTrustDomain(ctx)
+	if err != nil {
+		return nil, err
+	}
+	token, err := f.mintJWTAs(ctx, trustDomain, audience, adminSPIFFEPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var cluster *clientcmdapi.Cluster
+	for _, candidate := range parsed.Clusters {
+		if candidate != nil {
+			cluster = candidate
+			break
+		}
+	}
+	if cluster == nil {
+		return nil, fmt.Errorf("tenant kubeconfig for %q names no cluster", clusterName)
+	}
+
+	config := clientcmdapi.NewConfig()
+	config.Clusters["tenant"] = &clientcmdapi.Cluster{
+		Server:                   cluster.Server,
+		CertificateAuthorityData: cluster.CertificateAuthorityData,
+		InsecureSkipTLSVerify:    cluster.InsecureSkipTLSVerify,
+	}
+	config.AuthInfos["admin"] = &clientcmdapi.AuthInfo{Token: token}
+	config.Contexts["tenant"] = &clientcmdapi.Context{Cluster: "tenant", AuthInfo: "admin"}
+	config.CurrentContext = "tenant"
+
+	rendered, err := clientcmd.Write(*config)
+	if err != nil {
+		return nil, fmt.Errorf("writing admin kubeconfig for %q: %w", clusterName, err)
+	}
+	return rendered, nil
+}
+
 func isSPIREExecConfig(execConfig *clientcmdapi.ExecConfig) bool {
 	return execConfig != nil && filepath.Base(execConfig.Command) == spireExecPluginName
 }
