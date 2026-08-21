@@ -45,12 +45,24 @@ type staticDatabase struct {
 	nodesErr   error
 }
 
-func TestTenantCSRControllerRegistrationSupportsMultipleTenantsAndRestart(t *testing.T) {
+func TestTenantCSRControllerRegistrationUsesClusterScopedNamesAndRestartOptions(t *testing.T) {
 	clusterA := uuid.New()
 	clusterB := uuid.New()
-	nameA, _ := tenantCSRControllerRegistration(clusterA)
-	nameB, _ := tenantCSRControllerRegistration(clusterB)
+	nameA, optionsA := tenantCSRControllerRegistration(clusterA)
+	nameB, optionsB := tenantCSRControllerRegistration(clusterB)
+
+	require.Equal(t, "tenant-csr-"+clusterA.String(), nameA)
+	require.Equal(t, "tenant-csr-"+clusterB.String(), nameB)
 	require.NotEqual(t, nameA, nameB)
+	require.NotNil(t, optionsA.SkipNameValidation)
+	require.True(t, *optionsA.SkipNameValidation)
+	require.NotNil(t, optionsB.SkipNameValidation)
+	require.True(t, *optionsB.SkipNameValidation)
+}
+
+func TestNewRegistrarSupportsMultipleTenantsAndRestart(t *testing.T) {
+	clusterA := uuid.New()
+	clusterB := uuid.New()
 
 	// Register through NewRegistrar, not the helper. Asserting on the helper
 	// alone stays green when the call site drops the name or the options.
@@ -73,6 +85,7 @@ func newRegistrarForTest(t *testing.T) func(uuid.UUID) error {
 	registrar := NewRegistrar(staticDatabase{}, nil)
 
 	return func(clusterID uuid.UUID) error {
+		t.Helper()
 		mgr, err := manager.New(&rest.Config{Host: "https://127.0.0.1:1"}, manager.Options{
 			Scheme:  scheme,
 			Metrics: metricsserver.Options{BindAddress: "0"},
