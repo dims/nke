@@ -6,6 +6,7 @@ package e2e
 import (
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -719,10 +720,10 @@ case "$args" in
 					'apiserver_storage_transformation_operations_total{resource="secrets",status="OK",transformation_type="to_storage",transformer_prefix=""} 1'
 				;;
 			secretbox)
-				cat "$FAKE_SECRETBOX_METRICS_FIXTURE"
+				printf '%s' "$FAKE_SECRETBOX_METRICS"
 				;;
 			secretbox-legacy)
-				cat "$FAKE_SECRETBOX_LEGACY_METRICS_FIXTURE"
+				printf '%s' "$FAKE_SECRETBOX_LEGACY_METRICS"
 				;;
 			other)
 				printf '%s\n' \
@@ -768,6 +769,15 @@ case "$args" in
 		;;
 esac
 `
+
+// The CAPD entrypoint copies only the compiled test binary into its inner
+// runner, so captured fixtures must not depend on the process working directory.
+//
+//go:embed testdata/secretbox-transformation-metrics.prom
+var secretboxMetricsFixture string
+
+//go:embed testdata/secretbox-transformation-metrics-v1.29.prom
+var legacySecretboxMetricsFixture string
 
 func TestValidateKubeadmEncryptionConfig(t *testing.T) {
 	t.Parallel()
@@ -907,16 +917,6 @@ func TestEtcdEncryptionVerifyScript(t *testing.T) {
 			if err := os.WriteFile(kubectlPath, []byte(fakeEtcdVerifierKubectl), 0o700); err != nil {
 				t.Fatalf("writing fake kubectl: %v", err)
 			}
-			metricsFixturePath, absErr := filepath.Abs(filepath.Join("testdata", "secretbox-transformation-metrics.prom"))
-			if absErr != nil {
-				t.Fatalf("resolving metrics fixture path: %v", absErr)
-			}
-			legacyMetricsFixturePath, absErr := filepath.Abs(
-				filepath.Join("testdata", "secretbox-transformation-metrics-v1.29.prom"),
-			)
-			if absErr != nil {
-				t.Fatalf("resolving Kubernetes 1.29 metrics fixture path: %v", absErr)
-			}
 			terminationLogPath := filepath.Join(tempDir, "termination.log")
 			command := exec.CommandContext(t.Context(), "sh", "-c", etcdEncryptionVerifyScript)
 			command.Env = append(os.Environ(),
@@ -925,8 +925,8 @@ func TestEtcdEncryptionVerifyScript(t *testing.T) {
 				"E2E_TERMINATION_LOG="+terminationLogPath,
 				"TMPDIR="+tempDir,
 				"FAKE_STATE_DIR="+tempDir,
-				"FAKE_SECRETBOX_METRICS_FIXTURE="+metricsFixturePath,
-				"FAKE_SECRETBOX_LEGACY_METRICS_FIXTURE="+legacyMetricsFixturePath,
+				"FAKE_SECRETBOX_METRICS="+secretboxMetricsFixture,
+				"FAKE_SECRETBOX_LEGACY_METRICS="+legacySecretboxMetricsFixture,
 				"FAKE_PROVIDER_0=secretbox",
 				"FAKE_PROVIDER_1=identity",
 			)
