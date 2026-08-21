@@ -47,7 +47,10 @@ help: ## Display this help.
 
 .PHONY: lint
 lint: ## Lint source files.
-	go install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
+	@if ! "$(GOBIN)/golangci-lint" version 2>/dev/null \
+		| grep -qF "has version $(GOLANGCI_LINT_VERSION:v%=%) "; then \
+		go install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION); \
+	fi
 	$(GOBIN)/golangci-lint run --timeout 20m --concurrency 4 --max-same-issues 0 --max-issues-per-linter 0 ./...
 
 .PHONY: license

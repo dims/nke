@@ -160,12 +160,18 @@ nodes-status:
 # golangci-lint applies the formatters enabled in .golangci.yml (gci, gofumpt),
 # so there is no separate gofmt step here.
 fmt:
-	$(GO) install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
+	@if ! "$(GOBIN)/golangci-lint" version 2>/dev/null \
+		| grep -qF "has version $(GOLANGCI_LINT_VERSION:v%=%) "; then \
+		$(GO) install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION); \
+	fi
 	$(GOBIN)/golangci-lint fmt ./...
 
 # One recipe for CI and local, pinned by version, as in the sibling modules.
 lint:
-	$(GO) install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
+	@if ! "$(GOBIN)/golangci-lint" version 2>/dev/null \
+		| grep -qF "has version $(GOLANGCI_LINT_VERSION:v%=%) "; then \
+		$(GO) install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION); \
+	fi
 	$(GOBIN)/golangci-lint run --timeout 10m --max-same-issues 0 --max-issues-per-linter 0 ./...
 
 license: ## Ensure license headers at code.

@@ -168,7 +168,10 @@ vet: ## Run go vet
 
 .PHONY: lint
 lint: ## Lint source files.
-	go install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION)
+	@if ! "$(GOBIN)/golangci-lint" version 2>/dev/null \
+		| grep -qF "has version $(GOLANGCI_LINT_VERSION:v%=%) "; then \
+		go install $(GOLANGCI_LINT_REPO)@$(GOLANGCI_LINT_VERSION); \
+	fi
 	$(GOBIN)/golangci-lint run --timeout 10m --show-stats ./...
 
 # GO_TEST_FLAGS lets CI add -race without the workflow having to restate the

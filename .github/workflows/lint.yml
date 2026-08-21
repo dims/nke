@@ -85,6 +85,11 @@ jobs:
           cache: true
           cache-dependency-path: agent/go.sum
 
+      - name: Cache golangci-lint
+        uses: ./.github/actions/golangci-lint-cache
+        with:
+          working-directory: agent
+
       - name: Run golangci-lint
         working-directory: agent
         run: make lint
@@ -126,6 +131,11 @@ jobs:
             go.work.sum
             **/go.sum
 
+      - name: Cache golangci-lint
+        uses: ./.github/actions/golangci-lint-cache
+        with:
+          working-directory: controller
+
       - name: Run golangci-lint
         working-directory: controller
         run: make lint
@@ -154,6 +164,11 @@ jobs:
           cache-dependency-path: |
             cli/go.sum
             **/go.sum
+
+      - name: Cache golangci-lint
+        uses: ./.github/actions/golangci-lint-cache
+        with:
+          working-directory: cli
 
       - name: Run golangci-lint
         working-directory: cli
@@ -185,6 +200,11 @@ jobs:
             controller/hack/nico-mock/go.sum
             **/go.sum
 
+      - name: Cache golangci-lint
+        uses: ./.github/actions/golangci-lint-cache
+        with:
+          working-directory: controller/hack/nico-mock
+
       - name: Run golangci-lint
         working-directory: controller/hack/nico-mock
         run: make lint
@@ -211,6 +231,11 @@ jobs:
           cache: true
           cache-dependency-path: controller/forge-vms/go.sum
 
+      - name: Cache golangci-lint
+        uses: ./.github/actions/golangci-lint-cache
+        with:
+          working-directory: controller/forge-vms
+
       - name: Run golangci-lint
         working-directory: controller/forge-vms
         run: make lint
@@ -236,6 +261,11 @@ jobs:
           cache-dependency-path: |
             os-image/go.sum
             **/go.sum
+
+      - name: Cache golangci-lint
+        uses: ./.github/actions/golangci-lint-cache
+        with:
+          working-directory: os-image
 
       - name: Run golangci-lint
         working-directory: os-image

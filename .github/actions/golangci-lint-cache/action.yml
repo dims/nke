@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Restores the pinned golangci-lint binary so `make lint` does not rebuild it.
+#
+# `go install` relinks it from source every run, about 96s per job across six
+# lint jobs. setup-go's cache does not help: it is keyed on go.sum and only
+# saved on a miss, so the build products are never persisted.
+#
+# The `make lint` recipe skips `go install` when the pinned version is already
+# there. Both halves are needed: no cache means nothing to skip to, no skip
+# means the cache is ignored.
+#
+# The version is read from the module's Makefile so the key cannot drift.
+# Modules differ: agent pins v2.7.0, the rest v2.12.2.
+
+name: Cache golangci-lint
+description: Restore the pinned golangci-lint binary for a module.
+
+inputs:
+  working-directory:
+    description: Module directory holding the Makefile that pins GOLANGCI_LINT_VERSION.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Read the pinned golangci-lint version
+      id: pin
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        version=$(sed -n 's/^GOLANGCI_LINT_VERSION[[:space:]]*?\{0,1\}=[[:space:]]*//p' Makefile | head -1)
+        if [ -z "${version}" ]; then
+          echo "::error::GOLANGCI_LINT_VERSION not found in ${PWD}/Makefile"
+          exit 1
+        fi
+        echo "version=${version}" >> "${GITHUB_OUTPUT}"
+        echo "go=$(go env GOVERSION)" >> "${GITHUB_OUTPUT}"
+        echo "Pinned golangci-lint: ${version} (Go $(go env GOVERSION))"
+
+    # The Go version is part of the key. golangci-lint refuses to run when the
+    # Go that built it is older than the target version, and these jobs use
+    # different go-version-files, so one job's binary would otherwise break the
+    # others with:
+    #   the Go language version (go1.25) used to build golangci-lint is lower
+    #   than the targeted Go version (1.26.5)
+    - name: Restore golangci-lint
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/go/bin/golangci-lint
+        key: golangci-lint-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}-${{ steps.pin.outputs.go }}
