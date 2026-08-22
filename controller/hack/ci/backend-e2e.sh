@@ -30,6 +30,8 @@ CLUSTERCTL_BIN="${TMP_DIR}/clusterctl"
 TILT_BIN="${TMP_DIR}/tilt"
 BUNDLE_DIR="${TMP_DIR}/bundles"
 SOURCE_ARCHIVE="${TMP_DIR}/cwe-source.tgz"
+# Where the CAPNICo checkout lands inside the runner, when a NICo lane stages one.
+NICO_PROVIDER_CONTAINER_DIR=/workspace/cluster-api-provider-nico
 E2E_BIN="${TMP_DIR}/cwe-e2e.test"
 E2E_CONFIG="${TMP_DIR}/e2e-config.json"
 RUNNER_DOCKER_HOST="${DOCKER_HOST:-unix:///var/run/docker.sock}"
@@ -595,6 +597,29 @@ done
 docker cp "${SOURCE_ARCHIVE}" "${RUNNER_NAME}:/state/cwe-source.tgz"
 docker cp "${E2E_BIN}" "${RUNNER_NAME}:/state/cwe-e2e.test"
 
+# The NICo backend builds CAPNICo from a checkout. The source archive is
+# extracted with --transform s,^controller/,, so /workspace/cloud-workflow-engine
+# holds the CONTROLLER directory, not the monorepo root. That makes the
+# Tiltfile's relative default resolve outside /workspace, so the path is passed
+# explicitly as NICO_PROVIDER_REPO_DIR at the tilt invocation below rather than
+# inferred. Every other backend skips this entirely.
+if [[ -n "${NICO_PROVIDER_SRC:-}" ]]; then
+  if [[ ! -d "${NICO_PROVIDER_SRC}" ]]; then
+    log "NICO_PROVIDER_SRC is set but not a directory: ${NICO_PROVIDER_SRC}"
+    exit 1
+  fi
+  log "staging the CAPNICo provider from ${NICO_PROVIDER_SRC}"
+  nico_archive="${TMP_DIR}/cluster-api-provider-nico.tgz"
+  tar -C "$(dirname "${NICO_PROVIDER_SRC}")" \
+    --exclude .git \
+    -czf "${nico_archive}" "$(basename "${NICO_PROVIDER_SRC}")"
+  docker cp "${nico_archive}" "${RUNNER_NAME}:/state/cluster-api-provider-nico.tgz"
+  runner_exec sh -lc '
+    set -eu
+    mkdir -p /workspace
+    tar -C /workspace -xzf /state/cluster-api-provider-nico.tgz
+  '
+fi
 
 runner_exec sh -lc '
   set -eu
@@ -643,7 +668,7 @@ if [[ -z "${management_vip}" ]]; then
   exit 1
 fi
 # The provider list is the main thing that varies by backend. The default is
-# the CAPD set this script has always used; another backend passes its own.
+# the CAPD set this script has always used; nico-e2e.yml passes the NICo one.
 # capi_core is not optional: the Tiltfile refuses a list without it.
 : "${NKE_E2E_PROVIDERS:=[\"capi_core\", \"bgp-containers\", \"capd\", \"capd-reboot-controller\"]}"
 if ! jq -e 'type == "array" and length > 0' <<<"${NKE_E2E_PROVIDERS}" >/dev/null 2>&1; then
@@ -695,6 +720,9 @@ runner_exec env \
   CNPG_CLOUD_PASSWORD=example-password \
   CNPG_TEMPORAL_PASSWORD=example-password \
   CWE_PROFILES_DIR=/workspace/cloud-workflow-engine/test/fixtures/profiles \
+  NICO_PROVIDER_REPO_DIR="${NICO_PROVIDER_CONTAINER_DIR}" \
+  CAPD_KINDEST_NODE_IMAGE="${CAPD_NODE_IMAGE}" \
+  CAPD_KINDEST_NODE_IMAGE_PREBUILT=true \
   TILT_DISABLE_ANALYTICS=1 \
   bash -lc '
     set -euo pipefail

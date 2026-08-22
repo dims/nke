@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# The shared body of every backend E2E lane. capd-e2e.yml is the first caller;
+# The shared body of every backend E2E lane. capd-e2e.yml and nico-e2e.yml are
 # thin callers; everything they had in common lives here once.
 #
-# What differs between backends is small: the ginkgo label filter and the Tilt
-# provider list. What they share is not: runner setup, inotify tuning, and about
-# 60 lines of redaction-gated diagnostics collection. That block was the reason
-# to factor this out rather than copy it.
+# What differs between backends is small: the ginkgo label filter, the Tilt
+# provider list, and whether the run needs the internal CAPNICo checkout. What
+# they share is not: runner setup, inotify tuning, and about 60 lines of
+# redaction-gated diagnostics collection. That block was the reason to factor
+# this out rather than copy it.
 #
 # workflow_call only. It carries no triggers of its own, so a caller decides
 # when a backend runs.
@@ -41,6 +42,17 @@ on:
         required: false
         type: number
         default: 90
+      needs-nico-provider:
+        description: >-
+          Check out NVIDIA/cluster-api-provider-nico next to the monorepo. It is
+          an internal repository, so this needs NKE_INTERNAL_RO_TOKEN.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      NKE_INTERNAL_RO_TOKEN:
+        description: Read-only token for internal NVIDIA repositories.
+        required: false
 
 permissions: {}
 
@@ -59,12 +71,31 @@ jobs:
       NKE_E2E_PROVIDERS: ${{ inputs.providers }}
       KIND_CLUSTER_NAME: cwe-${{ inputs.backend }}-${{ github.run_id }}-${{ github.run_attempt }}
       GOPROXY: "off"
+      # Empty unless the caller asked for CAPNICo. The script stages the tree
+      # into the runner container only when this is set, so every other backend
+      # skips that work. This is the HOST path; the container path is a constant
+      # in the script, and is what Tilt is told.
+      NICO_PROVIDER_SRC: ${{ inputs.needs-nico-provider && format('{0}/.capnico/cluster-api-provider-nico', github.workspace) || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
+
+      # Inside the workspace, because actions/checkout refuses a path outside it
+      # ("Repository path ... is not under ..."). The directory name still has to
+      # be cluster-api-provider-nico: the script tars it by basename and expands
+      # it under /workspace in the runner container, where everything after this
+      # point executes.
+      - name: Checkout the CAPNICo provider
+        if: inputs.needs-nico-provider
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NVIDIA/cluster-api-provider-nico
+          token: ${{ secrets.NKE_INTERNAL_RO_TOKEN }}
+          path: .capnico/cluster-api-provider-nico
           persist-credentials: false
 
       - name: Set up Go

@@ -3,8 +3,8 @@
 
 # Full CAPD integration test using controller and agent source from this commit.
 #
-# The body lives in backend-e2e.yml, shared with any future backend lane. This
-# file is the CAPD trigger and configuration, nothing more.
+# The body lives in backend-e2e.yml, shared with nico-e2e.yml. This file is the
+# CAPD trigger and configuration, nothing more.
 #
 # Self-hosted runners do not receive pull_request events. copy-pr-bot mirrors a
 # vetted pull request head to pull-request/<number>; the push of that same commit
