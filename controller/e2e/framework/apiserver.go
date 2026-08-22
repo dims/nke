@@ -6,16 +6,38 @@
 package framework
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// setControllerRuntimeLogger installs the process-wide controller-runtime
+// logger. It is global, so it covers everything in the test process that logs
+// through controller-runtime, not only envtest.
+//
+// Without it, the first caller prints "log.SetLogger(...) was never called"
+// followed by a stack trace. NewRuntimeManager sets one, but that runs in the
+// worker process, not here.
+//
+// Routed to slog rather than discarded so the diagnostics survive.
+// `make e2e-gofail` runs `go test -v`, so they are visible on a failure.
+var controllerRuntimeLoggerOnce sync.Once
+
+func setControllerRuntimeLogger() {
+	controllerRuntimeLoggerOnce.Do(func() {
+		ctrllog.SetLogger(logr.FromSlogHandler(slog.Default().Handler()))
+	})
+}
 
 // kubebuilderAssetsEnv holds the directory of the kube-apiserver and etcd
 // binaries envtest runs. `make e2e-gofail` sets it from setup-envtest.
@@ -38,6 +60,7 @@ func StartAPIServer(t testing.TB) string {
 	if os.Getenv(kubebuilderAssetsEnv) == "" {
 		t.Skipf("%s is unset; run `make e2e-gofail`, which resolves it with setup-envtest", kubebuilderAssetsEnv)
 	}
+	setControllerRuntimeLogger()
 
 	env := &envtest.Environment{}
 	cfg, err := env.Start()
