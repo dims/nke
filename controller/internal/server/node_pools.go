@@ -172,7 +172,11 @@ func (s *nodePoolService) CreateNodePool(
 			return api.CreateNodePool400JSONResponse{Message: badRequestErr.Error()}, nil
 		}
 		if errors.Is(err, errClusterDeleting) {
-			return api.CreateNodePool409JSONResponse{Message: "Cannot create node pool when parent cluster is deleting"}, nil
+			return api.CreateNodePool409JSONResponse{
+				ConflictJSONResponse: api.ConflictJSONResponse{
+					Message: "Cannot create node pool when parent cluster is deleting",
+				},
+			}, nil
 		}
 		if errors.Is(err, errClusterNotFound) {
 			return api.CreateNodePool400JSONResponse{Message: "Parent cluster not found"}, nil

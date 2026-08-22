@@ -1776,6 +1776,7 @@ type ListClustersClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListClustersResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1799,6 +1800,8 @@ type CreateClusterClientResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *Cluster
 	JSON400      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1820,6 +1823,8 @@ func (r CreateClusterClientResponse) StatusCode() int {
 type DeleteClusterClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1842,6 +1847,7 @@ type GetClusterClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Cluster
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1865,7 +1871,8 @@ type UpdateClusterClientResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *Cluster
 	JSON400      *GenericError
-	JSON409      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1888,6 +1895,7 @@ type ListCNIPluginsClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListCNIPluginsResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1910,6 +1918,7 @@ type ListConfigProfilesClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListConfigProfilesResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1932,6 +1941,7 @@ type ListNodePoolsClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListNodePoolsResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1955,7 +1965,8 @@ type CreateNodePoolClientResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *NodePool
 	JSON400      *GenericError
-	JSON409      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -1978,6 +1989,8 @@ type DeleteNodePoolClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON400      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2000,6 +2013,7 @@ type GetNodePoolClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *NodePool
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2023,6 +2037,8 @@ type UpdateNodePoolClientResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *NodePool
 	JSON400      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2045,6 +2061,7 @@ type GetNodePoolConfigHistoryClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *NodePoolConfigHistory
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2067,6 +2084,7 @@ type ListNodeSetsClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListNodeSetsResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2089,6 +2107,7 @@ type GetNodeSetClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *NodeSet
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2111,6 +2130,7 @@ type ListNodesClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListNodesResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2133,6 +2153,7 @@ type DeleteNodeClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON400      *GenericError
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2155,6 +2176,7 @@ type GetNodeClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Node
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2177,6 +2199,7 @@ type GetNodeHistoryClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *NodeHistory
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2199,6 +2222,7 @@ type ListOSProfilesClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListOSProfilesResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2221,6 +2245,7 @@ type ListSitesClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListSitesResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2244,6 +2269,8 @@ type RegisterSiteClientResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *Site
 	JSON400      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2266,6 +2293,7 @@ type GetSiteClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Site
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2288,6 +2316,7 @@ type ListVIPAllocationsClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ListVIPAllocationsResponse
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2311,6 +2340,8 @@ type CreateVIPAllocationClientResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *VIPAllocation
 	JSON400      *GenericError
+	JSON409      *Conflict
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2333,6 +2364,7 @@ type GetVIPAllocationClientResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *VIPAllocation
+	JSON500      *InternalServerError
 }
 
 // Status returns HTTPResponse.Status
@@ -2661,6 +2693,14 @@ func ParseListClustersClientResponse(rsp *http.Response) (*ListClustersClientRes
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2694,6 +2734,20 @@ func ParseCreateClusterClientResponse(rsp *http.Response) (*CreateClusterClientR
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2710,6 +2764,23 @@ func ParseDeleteClusterClientResponse(rsp *http.Response) (*DeleteClusterClientR
 	response := &DeleteClusterClientResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2735,6 +2806,14 @@ func ParseGetClusterClientResponse(rsp *http.Response) (*GetClusterClientRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2769,11 +2848,18 @@ func ParseUpdateClusterClientResponse(rsp *http.Response) (*UpdateClusterClientR
 		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest GenericError
+		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 
@@ -2800,6 +2886,14 @@ func ParseListCNIPluginsClientResponse(rsp *http.Response) (*ListCNIPluginsClien
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2825,6 +2919,14 @@ func ParseListConfigProfilesClientResponse(rsp *http.Response) (*ListConfigProfi
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2850,6 +2952,14 @@ func ParseListNodePoolsClientResponse(rsp *http.Response) (*ListNodePoolsClientR
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2884,11 +2994,18 @@ func ParseCreateNodePoolClientResponse(rsp *http.Response) (*CreateNodePoolClien
 		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest GenericError
+		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 
@@ -2915,6 +3032,21 @@ func ParseDeleteNodePoolClientResponse(rsp *http.Response) (*DeleteNodePoolClien
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2940,6 +3072,14 @@ func ParseGetNodePoolClientResponse(rsp *http.Response) (*GetNodePoolClientRespo
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2973,6 +3113,20 @@ func ParseUpdateNodePoolClientResponse(rsp *http.Response) (*UpdateNodePoolClien
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -2998,6 +3152,14 @@ func ParseGetNodePoolConfigHistoryClientResponse(rsp *http.Response) (*GetNodePo
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3023,6 +3185,14 @@ func ParseListNodeSetsClientResponse(rsp *http.Response) (*ListNodeSetsClientRes
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3048,6 +3218,14 @@ func ParseGetNodeSetClientResponse(rsp *http.Response) (*GetNodeSetClientRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3073,6 +3251,14 @@ func ParseListNodesClientResponse(rsp *http.Response) (*ListNodesClientResponse,
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3098,6 +3284,14 @@ func ParseDeleteNodeClientResponse(rsp *http.Response) (*DeleteNodeClientRespons
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3123,6 +3317,14 @@ func ParseGetNodeClientResponse(rsp *http.Response) (*GetNodeClientResponse, err
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3148,6 +3350,14 @@ func ParseGetNodeHistoryClientResponse(rsp *http.Response) (*GetNodeHistoryClien
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3173,6 +3383,14 @@ func ParseListOSProfilesClientResponse(rsp *http.Response) (*ListOSProfilesClien
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3198,6 +3416,14 @@ func ParseListSitesClientResponse(rsp *http.Response) (*ListSitesClientResponse,
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3231,6 +3457,20 @@ func ParseRegisterSiteClientResponse(rsp *http.Response) (*RegisterSiteClientRes
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3256,6 +3496,14 @@ func ParseGetSiteClientResponse(rsp *http.Response) (*GetSiteClientResponse, err
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3281,6 +3529,14 @@ func ParseListVIPAllocationsClientResponse(rsp *http.Response) (*ListVIPAllocati
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3314,6 +3570,20 @@ func ParseCreateVIPAllocationClientResponse(rsp *http.Response) (*CreateVIPAlloc
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -3339,6 +3609,14 @@ func ParseGetVIPAllocationClientResponse(rsp *http.Response) (*GetVIPAllocationC
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil

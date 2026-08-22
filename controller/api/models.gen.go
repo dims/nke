@@ -1147,6 +1147,12 @@ type VIPAllocation struct {
 // VIPAllocationAllocationType Type of resource that has been allocated this VIP
 type VIPAllocationAllocationType string
 
+// Conflict defines model for Conflict.
+type Conflict = GenericError
+
+// InternalServerError defines model for InternalServerError.
+type InternalServerError = GenericError
+
 // ListClustersParams defines parameters for ListClusters.
 type ListClustersParams struct {
 	// Name Filter clusters by name (exact match)

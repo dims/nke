@@ -21,6 +21,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListCNIPluginsResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /clusters:
     get:
@@ -40,6 +42,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListClustersResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     post:
       summary: Create Cluster
       operationId: createCluster
@@ -62,6 +66,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenericError"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /clusters/{clusterID}:
     parameters:
@@ -83,6 +91,8 @@ paths:
                 $ref: "#/components/schemas/Cluster"
         "404":
           description: Cluster not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     patch:
       summary: Update a Cluster
       operationId: updateCluster
@@ -108,14 +118,9 @@ paths:
         "404":
           description: Cluster not found
         "409":
-          description: |
-            Another mutually-exclusive cluster operation is already in progress.
-            The response body includes the operation type (etcd_encryption,
-            k8s_upgrade, cp_nodes_recycling, oidc_enable) currently running.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GenericError"
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     delete:
       summary: Delete a Cluster
       operationId: deleteCluster
@@ -124,6 +129,10 @@ paths:
           description: Cluster deletion initiated
         "404":
           description: Cluster not found
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodePools:
     get:
@@ -156,6 +165,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListNodePoolsResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     post:
       summary: Create Node Pool
       operationId: createNodePool
@@ -179,11 +190,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/GenericError"
         "409":
-          description: Cannot create node pool when parent cluster is deleting
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GenericError"
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodePools/{nodePoolID}:
     parameters:
@@ -205,6 +214,8 @@ paths:
                 $ref: "#/components/schemas/NodePool"
         "404":
           description: Node Pool not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     patch:
       summary: Update Node Pool
       operationId: updateNodePool
@@ -229,6 +240,10 @@ paths:
                 $ref: "#/components/schemas/GenericError"
         "404":
           description: Node Pool not found
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     delete:
       summary: Delete a Node Pool
       description: |
@@ -248,6 +263,10 @@ paths:
                 $ref: "#/components/schemas/GenericError"
         "404":
           description: Node Pool not found
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodePools/{nodePoolID}/configHistory:
     parameters:
@@ -270,6 +289,8 @@ paths:
                 $ref: "#/components/schemas/NodePoolConfigHistory"
         "404":
           description: Node Pool not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodeSets:
     get:
@@ -290,6 +311,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListNodeSetsResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodeSets/{nodeSetID}:
     parameters:
@@ -311,6 +334,8 @@ paths:
                 $ref: "#/components/schemas/NodeSet"
         "404":
           description: Node Set not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodes:
     get:
@@ -350,6 +375,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListNodesResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodes/{nodeID}:
     parameters:
@@ -371,6 +398,8 @@ paths:
                 $ref: "#/components/schemas/Node"
         "404":
           description: Node not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     delete:
       summary: Delete a Single Node
       description: |
@@ -397,6 +426,8 @@ paths:
                 $ref: "#/components/schemas/GenericError"
         "404":
           description: Node not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /nodes/{nodeID}/history:
     parameters:
@@ -419,6 +450,8 @@ paths:
                 $ref: "#/components/schemas/NodeHistory"
         "404":
           description: Node not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /sites:
     get:
@@ -431,6 +464,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListSitesResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     post:
       summary: Register Site
       operationId: registerSite
@@ -453,6 +488,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenericError"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /sites/{siteID}:
     parameters:
@@ -474,6 +513,8 @@ paths:
                 $ref: "#/components/schemas/Site"
         "404":
           description: Site not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /vipAllocations:
     get:
@@ -494,6 +535,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListVIPAllocationsResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     post:
       summary: Create VIP Allocation
       operationId: createVIPAllocation
@@ -516,6 +559,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenericError"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /vipAllocations/{vipAllocationID}:
     parameters:
@@ -537,6 +584,8 @@ paths:
                 $ref: "#/components/schemas/VIPAllocation"
         "404":
           description: VIP allocation not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /osProfiles:
     get:
@@ -549,6 +598,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListOSProfilesResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /configProfiles:
     get:
@@ -561,8 +612,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListConfigProfilesResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
 components:
+  responses:
+    Conflict:
+      description: Request conflicts with the current resource state or management policy
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GenericError"
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GenericError"
+
   schemas:
     #--------------------------------
     #  Cluster
@@ -2404,4 +2471,3 @@ components:
           format: uuid
           description: The cluster ID (required if allocationType is cluster)
           x-order: 4
-

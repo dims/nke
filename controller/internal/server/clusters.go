@@ -610,7 +610,9 @@ func (s *clusterService) UpdateCluster(ctx context.Context, req api.UpdateCluste
 		// Return 409 when another mutually-exclusive operation is already running.
 		var uipErr *updateInProgressError
 		if errors.As(err, &uipErr) {
-			return api.UpdateCluster409JSONResponse{Message: uipErr.Error()}, nil
+			return api.UpdateCluster409JSONResponse{
+				ConflictJSONResponse: api.ConflictJSONResponse{Message: uipErr.Error()},
+			}, nil
 		}
 		var badRequestErr *badRequestError
 		if errors.As(err, &badRequestErr) {

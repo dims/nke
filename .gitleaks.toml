@@ -11,8 +11,12 @@ useDefault = true
 description = """vendor/ is the committed Go workspace vendor tree: verbatim
 third-party dependency source, which carries its upstream test fixtures —
 sample private keys, dummy tokens and the like. They are published upstream
-already and are not credentials of this repository. First-party code is not
-covered by this allowlist."""
+already and are not credentials of this repository. controller/api/server.gen.go
+contains a gzip/base64 copy of the separately scanned OpenAPI source and is
+reproducibly protected by generate-check; its high-entropy chunks otherwise
+produce generic-api-key false positives. Other first-party code is not covered
+by this allowlist."""
 paths = [
   '''^vendor/.*''',
+  '''^controller/api/server\.gen\.go$''',
 ]
