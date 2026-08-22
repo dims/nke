@@ -11,11 +11,15 @@
 # needs PostgreSQL, the envtest binaries, or a Temporal dev server, so folding
 # this into another lane would slow every job there for setup none of them use.
 #
-# NOT called from merge-gate.yml, so it does not gate a merge. It takes about six
-# minutes against a gate whose wall clock is about nine, so it would not extend
-# the critical path, but a fault-injection suite is worth watching for a while
-# before anything is blocked on it. Add it to the gate's `needs` once it has a
-# record.
+# Called from merge-gate.yml and listed in the gate's `needs`, so a red run
+# blocks a merge. It takes about six minutes against a gate whose wall clock is
+# about nine, set by golangci-lint (controller), so it does not extend the
+# critical path.
+#
+# It is the only gate member that needs a database, and the only one that runs a
+# built binary rather than a package, so it is the most likely to fail for
+# environmental reasons rather than for a real regression. Read a failure here
+# before assuming the change caused it.
 
 name: Gofail E2E
 
