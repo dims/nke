@@ -1,0 +1,91 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Runs the gofail fault-injection suite, which nothing ran before this. It is the
+# largest body of test code in the repository that never executed: two scenarios
+# over roughly 1,850 lines, and the only thing that exercises cmd/worker as a
+# built binary rather than as a package.
+#
+# It is a separate workflow rather than another job in an existing lane, which
+# breaks the usual rule of extending a lane instead of adding one. Nothing else
+# needs PostgreSQL, the envtest binaries, or a Temporal dev server, so folding
+# this into another lane would slow every job there for setup none of them use.
+#
+# NOT called from merge-gate.yml, so it does not gate a merge. It takes about six
+# minutes against a gate whose wall clock is about nine, so it would not extend
+# the critical path, but a fault-injection suite is worth watching for a while
+# before anything is blocked on it. Add it to the gate's `needs` once it has a
+# record.
+
+name: Gofail E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'controller/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - 'vendor/**'
+      - '.github/workflows/gofail-e2e.yml'
+  workflow_call:
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  # The sha is part of the group on main so back-to-back merges keep their
+  # results, matching every other workflow here.
+  group: Gofail E2E-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  gofail:
+    name: Gofail E2E
+    runs-on: ubuntu-latest
+    if: github.repository == 'NVIDIA/nke'
+    # The two scenarios took 158s and 188s when measured, and both wait on real
+    # heartbeat timeouts, so the budget is deliberately loose.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+
+      # The runner image already ships PostgreSQL, so start that rather than
+      # pull a service container. Same approach as NVIDIA/infra-controller.
+      #
+      # Starting it also avoids `initdb`, which the framework runs only when no
+      # DSN is set, and which refuses to run as root.
+      #
+      # Durability off: this database is thrown away with the runner.
+      - name: Start PostgreSQL
+        run: |
+          set -euo pipefail
+          printf 'fsync = off\nsynchronous_commit = off\nfull_page_writes = off\n' \
+            | sudo tee -a /etc/postgresql/*/main/postgresql.conf >/dev/null
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'gofail';"
+          sudo -u postgres psql -c "CREATE DATABASE gofail_e2e;"
+          pg_isready
+
+      # Builds the worker with -tags gofail, resolves the envtest binaries with
+      # setup-envtest, starts Temporal and PostgreSQL, and asserts no generated
+      # *.fail.go file is left behind.
+      - name: Run the gofail suite
+        working-directory: controller
+        env:
+          CWE_GOFAIL_E2E_DB_CONNECTION_STRING: postgres://postgres:gofail@127.0.0.1:5432/gofail_e2e?sslmode=disable
+        run: make e2e-gofail
