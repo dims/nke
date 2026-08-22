@@ -59,14 +59,40 @@ jobs:
         with:
           persist-credentials: false
 
+      # cache: false, deliberately. setup-go's cache only SAVES on a key miss, so
+      # once go.sum settles it restores a stale entry and never refreshes it.
+      # This lane's expensive artefact is a `-tags gofail` build, which shares no
+      # cache entries with the untagged builds every other lane does, so it would
+      # never be written back. The two explicit caches below always save.
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            **/go.sum
+          cache: false
+
+      # Unique key, so this always saves; restore-keys take the most recent
+      # match. That is the difference from setup-go's behaviour above.
+      - name: Cache Go build and module cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gofail-go-${{ runner.os }}-${{ hashFiles('go.work.sum', '**/go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            gofail-go-${{ runner.os }}-${{ hashFiles('go.work.sum', '**/go.sum') }}-
+            gofail-go-${{ runner.os }}-
+
+      # 160 MB of etcd, kube-apiserver and kubectl. The Makefile pins the store
+      # to controller/.go/envtest with --bin-dir, so this path is exact rather
+      # than a guess at setup-envtest's platform-dependent default.
+      # Keyed on the Makefile, which is where ENVTEST_K8S_VERSION lives.
+      - name: Cache envtest binaries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: controller/.go/envtest
+          key: envtest-${{ runner.os }}-${{ hashFiles('controller/Makefile') }}
+          restore-keys: envtest-${{ runner.os }}-
 
       # The runner image already ships PostgreSQL, so start that rather than
       # pull a service container. Same approach as NVIDIA/infra-controller.
