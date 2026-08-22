@@ -183,7 +183,7 @@ var _ = DescribeTableSubtree("NKE with backend", withForgeVMSOSProfileEntries(
 			controlPlaneVIP:   capdControlPlaneVIP,
 		},
 		options:  nke.Options{Provision: 10 * time.Minute, Delete: 5 * time.Minute, Poll: 5 * time.Second},
-		validate: validations{scale: true, reboot: true, postReadyChecks: true, csrApproval: true},
+		validate: validations{scale: true, reboot: true, postReadyChecks: true, csrApproval: true, nodePoolLifecycle: true},
 	}),
 	Entry("nico-containers", Ordered, ContinueOnFailure, Label("nico-containers", "happy-path"), testSpec{
 		buildSpec: nicoSpec,
