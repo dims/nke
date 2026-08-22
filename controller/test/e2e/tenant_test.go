@@ -438,6 +438,11 @@ func (t *tenantTest) initCluster(ctx context.Context, b testSpec) {
 	Expect(err).NotTo(HaveOccurred(), "should create the cluster")
 	t.log.Info("Created cluster", "name", cluster.Name, "id", cluster.ID)
 
+	By("Verifying the tenant cluster appears in the cluster list")
+	listedCluster, err := t.nke.GetByName(ctx, cluster.Name)
+	Expect(err).NotTo(HaveOccurred(), "should list the created cluster by name")
+	Expect(listedCluster.ID).To(Equal(cluster.ID), "listed cluster should match the created cluster")
+
 	By("Waiting for the tenant cluster to be provisioned")
 	start := time.Now()
 	cluster, err = t.nke.WaitForClusterReady(ctx, cluster.ID)
