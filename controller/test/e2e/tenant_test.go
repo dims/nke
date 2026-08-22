@@ -479,6 +479,7 @@ func capdSpec(cfg config.Config, name string, shape clusterShape) nke.ClusterSpe
 		KubernetesVersion: defaultString(shape.kubernetesVersion, defaultKubernetesVersion),
 		CNIPlugin:         defaultString(shape.cniPlugin, CNIPluginCalico),
 		CAPDNodeImage:     cfg.Cluster.CAPDNodeImage,
+		SiteID:            uuid.Nil.String(),
 		ControlPlane: nke.ControlPlane{
 			Pools:           capdNodePoolSpecs(shape.controlPlanePools, "control-plane", "cp"),
 			EtcdEncrypted:   shape.etcdEncrypted,
@@ -488,7 +489,7 @@ func capdSpec(cfg config.Config, name string, shape clusterShape) nke.ClusterSpe
 	}
 }
 
-func TestUnit_CAPDSpecControlPlaneVIP(t *testing.T) {
+func TestUnit_CAPDSpec(t *testing.T) {
 	tests := map[string]string{
 		"explicit VIP": capdControlPlaneVIP,
 		"empty VIP":    "",
@@ -497,6 +498,9 @@ func TestUnit_CAPDSpecControlPlaneVIP(t *testing.T) {
 	for name, wantVIP := range tests {
 		t.Run(name, func(t *testing.T) {
 			spec := capdSpec(config.Config{}, "capd-test", clusterShape{controlPlaneVIP: wantVIP})
+			if spec.SiteID != uuid.Nil.String() {
+				t.Fatalf("SiteID = %q, want %q", spec.SiteID, uuid.Nil.String())
+			}
 			if spec.ControlPlane.ControlPlaneVIP != wantVIP {
 				t.Fatalf("ControlPlaneVIP = %q, want %q", spec.ControlPlane.ControlPlaneVIP, wantVIP)
 			}
