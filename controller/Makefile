@@ -4,6 +4,10 @@ WORKER_BIN_NAME			?= cloud-workflow-engine
 TEMPORAL_CLI_DOWNLOAD_DIR	?= $(CURDIR)/.go/temporal-cli
 CWE_GOFAIL_E2E_WORKER_BINARY	?= $(CURDIR)/.go/bin/cwe-worker-gofail
 GOFAIL				?= $(shell go env GOPATH)/bin/gofail
+SETUP_ENVTEST			?= $(shell go env GOPATH)/bin/setup-envtest
+SETUP_ENVTEST_VERSION		?= release-0.24
+# Kubernetes version for the envtest kube-apiserver and etcd binaries.
+ENVTEST_K8S_VERSION		?= 1.34.1
 
 # The licence header template lives once, at the repository root.
 REPO_ROOT ?= $(shell git rev-parse --show-toplevel)
@@ -170,6 +174,9 @@ e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
 	@bash -euo pipefail -c '\
 		mkdir -p "$(TEMPORAL_CLI_DOWNLOAD_DIR)" "$$(dirname "$(CWE_GOFAIL_E2E_WORKER_BINARY)")"; \
 		go install go.etcd.io/gofail@v0.2.0; \
+		go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(SETUP_ENVTEST_VERSION); \
+		KUBEBUILDER_ASSETS="$$("$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) -p path)"; \
+		export KUBEBUILDER_ASSETS; \
 		"$(GOFAIL)" enable internal/temporal/activities; \
 		cleanup() { \
 			"$(GOFAIL)" disable internal/temporal/activities; \
