@@ -9,14 +9,14 @@ CONTROLLER_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 WORKSPACE_ROOT="$(cd "${CONTROLLER_ROOT}/.." && pwd)"
 cd "${CONTROLLER_ROOT}"
 
-RUN_ID="${CAPD_E2E_RUN_ID:-${GITHUB_RUN_ID:-local-$$}}"
+RUN_ID="${NKE_E2E_RUN_ID:-${GITHUB_RUN_ID:-local-$$}}"
 RUN_ID="${RUN_ID//[^a-zA-Z0-9_.-]/-}"
 RUN_ID="${RUN_ID:0:64}"
-STATE_DIR="${CAPD_E2E_STATE_DIR:-${CONTROLLER_ROOT}/.local/capd-e2e/${RUN_ID}}"
+STATE_DIR="${NKE_E2E_STATE_DIR:-${CONTROLLER_ROOT}/.local/backend-e2e/${RUN_ID}}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-cwe-capi}"
-DOCKERHUB_MIRROR="${CAPD_E2E_DOCKERHUB_MIRROR:-}"
+DOCKERHUB_MIRROR="${NKE_E2E_DOCKERHUB_MIRROR:-}"
 RUNNER_NAME="capd-e2e-runner-${RUN_ID}"
-RUNNER_IMAGE="${CAPD_E2E_RUNNER_IMAGE:-docker:29.1.3-cli@sha256:4fa0ee1f3a7e4354c4ea34558b6d4ee32859baf4973d4c8ccc8e7fe3dd730c04}"
+RUNNER_IMAGE="${NKE_E2E_RUNNER_IMAGE:-docker:29.1.3-cli@sha256:4fa0ee1f3a7e4354c4ea34558b6d4ee32859baf4973d4c8ccc8e7fe3dd730c04}"
 STATE_VOLUME="capd-e2e-state-${RUN_ID}"
 BUNDLE_MIRROR_NAME="capd-e2e-bundle-mirror-${RUN_ID}"
 BUNDLE_LOADER_NAME="capd-e2e-bundle-loader-${RUN_ID}"
@@ -133,7 +133,7 @@ runner_exec() {
   docker exec \
     -e KUBECONFIG=/state/management.kubeconfig \
     -e DOCKER_HOST="${RUNNER_DOCKER_HOST}" \
-    -e CAPD_E2E_DOCKERHUB_MIRROR="${DOCKERHUB_MIRROR}" \
+    -e NKE_E2E_DOCKERHUB_MIRROR="${DOCKERHUB_MIRROR}" \
     "${RUNNER_NAME}" "$@"
 }
 
@@ -369,7 +369,7 @@ for command in curl docker find git go grep helm jq kind kubectl sed sha256sum t
   require_command "${command}"
 done
 if [[ -n "${DOCKERHUB_MIRROR}" && ! "${DOCKERHUB_MIRROR}" =~ ^[a-zA-Z0-9.-]+(:[0-9]{1,5})?$ ]]; then
-  log "CAPD_E2E_DOCKERHUB_MIRROR must be a registry host with an optional port" >&2
+  log "NKE_E2E_DOCKERHUB_MIRROR must be a registry host with an optional port" >&2
   exit 1
 fi
 docker info >/dev/null
@@ -539,7 +539,7 @@ BUNDLE_SERVER_URL="http://${BUNDLE_MIRROR_NAME}/" \
 INDEX_FILE_URL="http://${BUNDLE_MIRROR_NAME}/index.json" \
 CAPD_KINDEST_NODE_IMAGE="${CAPD_NODE_IMAGE}" \
 CAPD_KINDEST_NODE_PLATFORM="${CAPD_KINDEST_NODE_PLATFORM:-linux/amd64}" \
-CAPD_E2E_DOCKERHUB_MIRROR="${DOCKERHUB_MIRROR}" \
+NKE_E2E_DOCKERHUB_MIRROR="${DOCKERHUB_MIRROR}" \
   bash hack/capd-kindest-node/build-image.sh
 CAPD_NODE_IMAGE_OWNED=true
 docker image inspect "${CAPD_NODE_IMAGE}" >"${STATE_DIR}/capd-node-image.json"
@@ -595,6 +595,7 @@ done
 docker cp "${SOURCE_ARCHIVE}" "${RUNNER_NAME}:/state/cwe-source.tgz"
 docker cp "${E2E_BIN}" "${RUNNER_NAME}:/state/cwe-e2e.test"
 
+
 runner_exec sh -lc '
   set -eu
   if command -v apk >/dev/null; then
@@ -641,12 +642,22 @@ if [[ -z "${management_vip}" ]]; then
   log "Kind control-plane IP was not found"
   exit 1
 fi
+# The provider list is the main thing that varies by backend. The default is
+# the CAPD set this script has always used; another backend passes its own.
+# capi_core is not optional: the Tiltfile refuses a list without it.
+: "${NKE_E2E_PROVIDERS:=[\"capi_core\", \"bgp-containers\", \"capd\", \"capd-reboot-controller\"]}"
+if ! jq -e 'type == "array" and length > 0' <<<"${NKE_E2E_PROVIDERS}" >/dev/null 2>&1; then
+  log "NKE_E2E_PROVIDERS must be a non-empty JSON array, got: ${NKE_E2E_PROVIDERS}"
+  exit 1
+fi
+
 jq -n \
   --arg cwe_image "${CWE_IMAGE}" \
   --arg site_controller_vip "${management_vip}" \
   --arg bgp_container_name "${BGP_CONTAINER_NAME}" \
+  --argjson providers "${NKE_E2E_PROVIDERS}" \
   '{
-    providers: ["capi_core", "bgp-containers", "capd", "capd-reboot-controller"],
+    providers: $providers,
     cwe_image: $cwe_image,
     site_controller_vip: $site_controller_vip,
     bgp_containers_container_name: $bgp_container_name
@@ -710,18 +721,21 @@ runner_exec kubectl get --raw \
   /api/v1/namespaces/cloud-workflow-engine/services/cloud-workflow-engine:8080/proxy/api/version \
   >"${STATE_DIR}/cwe-version.json"
 
+# The default is the CAPD lane's filter, for a local run with nothing set. A
+# caller passes its own; the NICo lane passes nico-containers.
+#
 # `health` rides along with `capd`. Those specs need a cluster running CWE in
 # namespace cloud-workflow-engine on port 8080, which this script has already
-# built and waited on by line 700. They are three HTTP probes through a service
-# proxy, so they cost seconds rather than minutes.
-CAPD_E2E_LABEL_FILTER="${CAPD_E2E_LABEL_FILTER:-capd || health}"
-CAPD_E2E_FOCUS="${CAPD_E2E_FOCUS:-}"
+# built and waited on above. They are three HTTP probes through a service proxy,
+# so they cost seconds rather than minutes.
+NKE_E2E_LABEL_FILTER="${NKE_E2E_LABEL_FILTER:-capd || health}"
+NKE_E2E_FOCUS="${NKE_E2E_FOCUS:-}"
 ginkgo_focus_args=()
-if [[ -n "${CAPD_E2E_FOCUS}" ]]; then
-  ginkgo_focus_args+=("-ginkgo.focus=${CAPD_E2E_FOCUS}")
-  log "running CAPD E2E scenarios matching label ${CAPD_E2E_LABEL_FILTER} and focus ${CAPD_E2E_FOCUS}"
+if [[ -n "${NKE_E2E_FOCUS}" ]]; then
+  ginkgo_focus_args+=("-ginkgo.focus=${NKE_E2E_FOCUS}")
+  log "running CAPD E2E scenarios matching label ${NKE_E2E_LABEL_FILTER} and focus ${NKE_E2E_FOCUS}"
 else
-  log "running CAPD E2E scenarios matching label ${CAPD_E2E_LABEL_FILTER}"
+  log "running CAPD E2E scenarios matching label ${NKE_E2E_LABEL_FILTER}"
 fi
 start_state_monitor
 set +e
@@ -737,7 +751,7 @@ runner_exec env "CWE_EXPECTED_VERSION=${CWE_BUILD_VERSION}" \
   -ginkgo.no-color \
   -ginkgo.fail-on-empty \
   -ginkgo.timeout=100m \
-  "-ginkgo.label-filter=${CAPD_E2E_LABEL_FILTER}" \
+  "-ginkgo.label-filter=${NKE_E2E_LABEL_FILTER}" \
   "${ginkgo_focus_args[@]}" \
   -ginkgo.junit-report=/state/junit.xml \
   2>&1 | tee "${STATE_DIR}/e2e.log"
