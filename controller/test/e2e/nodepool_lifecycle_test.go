@@ -6,6 +6,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -129,8 +130,21 @@ func validateManualScaleDownStability(test *tenantTest) {
 // deletes it and confirms it is gone.
 func validateAdditionalNodePool(test *tenantTest) {
 	It("creates, scales, and deletes an additional worker node pool", func(ctx context.Context) {
-		_, primaryPool := expectScalePools(ctx, test)
+		controlPlanePool, primaryPool := expectScalePools(ctx, test)
 		primaryBefore := expectNodeIDs(ctx, test, primaryPool.ID)
+
+		By("Verifying the only joined control-plane pool cannot be deleted")
+		resp, err := test.nke.API().DeleteNodePoolWithResponse(ctx, controlPlanePool.ID)
+		Expect(err).NotTo(HaveOccurred(), "should receive a response when deleting the control-plane pool")
+		Expect(resp.StatusCode()).To(Equal(http.StatusBadRequest), "response body: %s", resp.Body)
+		Expect(resp.JSON400).NotTo(BeNil(), "400 response should contain a structured error")
+		Expect(resp.JSON400.Message).To(ContainSubstring("last joined control-plane node pool"))
+
+		poolAfterRejection, status, err := test.nke.GetNodePool(ctx, controlPlanePool.ID)
+		Expect(err).NotTo(HaveOccurred(), "should get the control-plane pool after its deletion is rejected")
+		Expect(status).To(Equal(http.StatusOK))
+		Expect(poolAfterRejection).NotTo(BeNil())
+		Expect(poolAfterRejection.ID).To(Equal(controlPlanePool.ID), "rejected deletion should preserve the control-plane pool")
 
 		By("Creating an additional worker node pool")
 		req := expectSucceed(workerNodePoolRequest(test, extraPoolName, "wx"))
