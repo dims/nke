@@ -128,6 +128,7 @@ registry:
 // real kind binary or container runtime.
 func TestRunBootstrapSiteValidReachesStub(t *testing.T) {
 	t.Setenv("NKECTL_CWE_IMAGE", "nvcr.io/org/controller:edge")
+	t.Setenv("NKECTL_CWE_PROFILES_IMAGE", "nvcr.io/org/cwe-profiles:v1")
 
 	runner := &recordingRunner{next: fakeBootstrapRunner{}}
 	err := runBootstrapSite(&bootstrapSiteOptions{
@@ -154,6 +155,7 @@ func TestRunBootstrapSiteValidReachesStub(t *testing.T) {
 // the default provider, and such a host need not have Docker at all.
 func TestRunBootstrapSiteUsesTheProviderCLI(t *testing.T) {
 	t.Setenv("NKECTL_CWE_IMAGE", "nvcr.io/org/controller:edge")
+	t.Setenv("NKECTL_CWE_PROFILES_IMAGE", "nvcr.io/org/cwe-profiles:v1")
 
 	// --bootstrap-provider value -> the CLI the lookup must use.
 	for provider, wantCLI := range map[string]string{"": "nerdctl", "docker": "docker"} {

@@ -58,6 +58,12 @@ func TestDeploy_RequiresKubeconfigAndImage(t *testing.T) {
 	if err := e.Deploy(context.Background(), "/tmp/kubeconfig", Config{}); err == nil {
 		t.Fatal("expected an error for a missing Config.CWEImage")
 	}
+	// Without profiles CWE fails its schema migration, so say so up front
+	// rather than after a five-minute wait on a pod that will never be ready.
+	if err := e.Deploy(context.Background(), "/tmp/kubeconfig",
+		Config{CWEImage: "nvcr.io/org/controller:edge"}); err == nil {
+		t.Fatal("expected an error for a missing Config.ProfilesImage")
+	}
 }
 
 func TestDeploy_InstallsPostgresTemporalThenCWEInOrder(t *testing.T) {
@@ -66,6 +72,7 @@ func TestDeploy_InstallsPostgresTemporalThenCWEInOrder(t *testing.T) {
 
 	cfg := Config{
 		CWEImage:         "nvcr.io/org/controller:edge",
+		ProfilesImage:    "nvcr.io/org/cwe-profiles:v1",
 		ChartPath:        t.TempDir(), // any existing dir stands in for the chart
 		PostgresPassword: "test-password",
 	}
@@ -108,6 +115,11 @@ func TestDeploy_InstallsPostgresTemporalThenCWEInOrder(t *testing.T) {
 	if !strings.Contains(cwe, "image.repository=nvcr.io/org/controller") || !strings.Contains(cwe, "image.tag=edge") {
 		t.Errorf("cwe call = %q, want the image split into repository/tag", cwe)
 	}
+	if !strings.Contains(cwe, "profiles.image.enabled=true") ||
+		!strings.Contains(cwe, "profiles.image.repository=nvcr.io/org/cwe-profiles") ||
+		!strings.Contains(cwe, "profiles.path="+profilesPath) {
+		t.Errorf("cwe call = %q, want the profiles init container enabled and pointed at the image", cwe)
+	}
 }
 
 func TestDeploy_PropagatesHelmError(t *testing.T) {
@@ -117,8 +129,9 @@ func TestDeploy_PropagatesHelmError(t *testing.T) {
 	e := New(runner, nil)
 
 	err := e.Deploy(context.Background(), "/tmp/kubeconfig", Config{
-		CWEImage:  "nvcr.io/org/controller:edge",
-		ChartPath: t.TempDir(),
+		CWEImage:      "nvcr.io/org/controller:edge",
+		ProfilesImage: "nvcr.io/org/cwe-profiles:v1",
+		ChartPath:     t.TempDir(),
 	})
 	if err == nil {
 		t.Fatal("expected Deploy to propagate the helm error")
@@ -269,6 +282,7 @@ func TestDeploy_PinsImageByDigest(t *testing.T) {
 	runner := &fakeRunner{}
 	cfg := Config{
 		CWEImage:         "ghcr.io/nvidia/nke/controller@" + digest,
+		ProfilesImage:    "nvcr.io/org/cwe-profiles:v1",
 		ChartPath:        t.TempDir(),
 		PostgresPassword: "test-password",
 	}

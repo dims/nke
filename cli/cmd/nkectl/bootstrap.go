@@ -177,13 +177,16 @@ func runBootstrapSite(opts *bootstrapSiteOptions) error {
 // deployAndWaitForCWE installs Postgres, Temporal and CWE onto cluster and
 // polls CWE's /readyz until it reports healthy or a bounded timeout elapses.
 //
-// The CWE image is loaded into the kind cluster directly (bootstrapengine's
-// existing Engine.LoadImage, via `kind load docker-image`) rather than
-// pulled from inside the cluster: the cluster is ephemeral and has no image
-// pull secret configured, and this way authenticating to whatever registry
-// hosts the image (see cwedeploy.Config.CWEImage's doc comment) is the
-// caller's problem, not nkectl's — `docker login` once on the host, same as
-// any other pull, before running this command.
+// The CWE and profiles images are loaded into the kind cluster directly
+// (bootstrapengine's existing Engine.LoadImage, via `kind load docker-image`)
+// rather than pulled from inside the cluster: the cluster is ephemeral and
+// has no image pull secret configured, and this way authenticating to
+// whatever registry hosts them is the caller's problem, not nkectl's —
+// `docker login` once on the host, same as any other pull, before running
+// this command.
+//
+// CWE reads osProfiles/metadata.yaml during schema migration, so it
+// crash-loops without a profiles tree.
 func deployAndWaitForCWE(
 	ctx context.Context,
 	engine *bootstrapengine.Engine,
@@ -197,8 +200,15 @@ func deployAndWaitForCWE(
 			"(e.g. nvcr.io/<org>/controller:edge — see .github/workflows/image-nvcr.yml)")
 	}
 
-	if err := ensureImageAvailable(ctx, engine, cluster, cweCfg.CWEImage, logger); err != nil {
-		return fmt.Errorf("loading cwe image into bootstrap kind cluster: %w", err)
+	if cweCfg.ProfilesImage == "" {
+		return errors.New("NKECTL_CWE_PROFILES_IMAGE is not set; it must name an image " +
+			"holding the OS profiles tree at /profiles")
+	}
+
+	for _, image := range []string{cweCfg.CWEImage, cweCfg.ProfilesImage} {
+		if err := ensureImageAvailable(ctx, engine, cluster, image, logger); err != nil {
+			return fmt.Errorf("loading %s into bootstrap kind cluster: %w", image, err)
+		}
 	}
 
 	cwe := cwedeploy.New(cweRunner, logger)
@@ -220,8 +230,7 @@ func deployAndWaitForCWE(
 // it is not already cached from a previous run.
 //
 // The CLI follows cluster.Provider, because that is the store kind loads
-// from. A nerdctl host need not have Docker at all. Both provider names are
-// also their CLI name.
+// from. A nerdctl host need not have Docker at all.
 func ensureImageAvailable(
 	ctx context.Context,
 	engine *bootstrapengine.Engine,
