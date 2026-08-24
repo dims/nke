@@ -218,6 +218,10 @@ func deployAndWaitForCWE(
 // ensureImageAvailable makes sure image is present in the local container
 // runtime's image store before handing it to Engine.LoadImage, pulling it if
 // it is not already cached from a previous run.
+//
+// The CLI follows cluster.Provider, because that is the store kind loads
+// from. A nerdctl host need not have Docker at all. Both provider names are
+// also their CLI name.
 func ensureImageAvailable(
 	ctx context.Context,
 	engine *bootstrapengine.Engine,
@@ -225,12 +229,13 @@ func ensureImageAvailable(
 	image string,
 	logger *slog.Logger,
 ) error {
-	if _, err := engine.Runner.Run(ctx, nil, "docker", "image", "inspect", image); err != nil {
-		logger.Info("cwe image not cached locally; pulling", "image", image)
-		if out, err := engine.Runner.Run(ctx, nil, "docker", "pull", image); err != nil {
-			return fmt.Errorf("docker pull %s: %w\n%s\n"+
+	cli := string(cluster.Provider)
+	if _, err := engine.Runner.Run(ctx, nil, cli, "image", "inspect", image); err != nil {
+		logger.Info("cwe image not cached locally; pulling", "image", image, "runtime", cli)
+		if out, err := engine.Runner.Run(ctx, nil, cli, "pull", image); err != nil {
+			return fmt.Errorf("%s pull %s: %w\n%s\n"+
 				"if this is an authentication failure, log in to the image's registry "+
-				"(e.g. `docker login nvcr.io`) and re-run", image, err, out)
+				"(e.g. `%s login nvcr.io`) and re-run", cli, image, err, out, cli)
 		}
 	}
 	return engine.LoadImage(ctx, cluster.Name, cluster.Provider, image)
