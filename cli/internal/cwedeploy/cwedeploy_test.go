@@ -234,20 +234,51 @@ func TestWaitReady_TimesOutWithLastResponseInError(t *testing.T) {
 }
 
 func TestSplitImageRef(t *testing.T) {
+	const digest = "sha256:8090c7c4538af8e717d52f5edcf26eaf4a4afae2d3e9a25c8208b0704934954e"
+
 	tests := []struct {
-		ref      string
-		wantRepo string
-		wantTag  string
+		ref        string
+		wantRepo   string
+		wantTag    string
+		wantDigest string
 	}{
-		{"nvcr.io/org/controller:edge", "nvcr.io/org/controller", "edge"},
-		{"nvcr.io/org/controller:sha-abc123", "nvcr.io/org/controller", "sha-abc123"},
-		{"localhost:5000/controller:edge", "localhost:5000/controller", "edge"},
-		{"nvcr.io/org/controller", "nvcr.io/org/controller", "latest"},
+		{"nvcr.io/org/controller:edge", "nvcr.io/org/controller", "edge", ""},
+		{"nvcr.io/org/controller:sha-abc123", "nvcr.io/org/controller", "sha-abc123", ""},
+		{"localhost:5000/controller:edge", "localhost:5000/controller", "edge", ""},
+		{"nvcr.io/org/controller", "nvcr.io/org/controller", "latest", ""},
+		// The colon inside "sha256:..." must not read as a tag separator,
+		// which would leave a repository ending in "@sha256".
+		{"ghcr.io/nvidia/nke/controller@" + digest, "ghcr.io/nvidia/nke/controller", "", digest},
+		{"ghcr.io/nvidia/nke/controller:v0.1.1-rc.2@" + digest, "ghcr.io/nvidia/nke/controller", "v0.1.1-rc.2", digest},
+		{"localhost:5000/controller@" + digest, "localhost:5000/controller", "", digest},
 	}
 	for _, tt := range tests {
-		repo, tag := splitImageRef(tt.ref)
-		if repo != tt.wantRepo || tag != tt.wantTag {
-			t.Errorf("splitImageRef(%q) = (%q, %q), want (%q, %q)", tt.ref, repo, tag, tt.wantRepo, tt.wantTag)
+		repo, tag, dgst := splitImageRef(tt.ref)
+		if repo != tt.wantRepo || tag != tt.wantTag || dgst != tt.wantDigest {
+			t.Errorf("splitImageRef(%q) = (%q, %q, %q), want (%q, %q, %q)",
+				tt.ref, repo, tag, dgst, tt.wantRepo, tt.wantTag, tt.wantDigest)
 		}
+	}
+}
+
+// A digest must reach helm as image.digest. As image.tag it would render
+// "repo:sha256:...", which Kubernetes cannot pull.
+func TestDeploy_PinsImageByDigest(t *testing.T) {
+	const digest = "sha256:8090c7c4538af8e717d52f5edcf26eaf4a4afae2d3e9a25c8208b0704934954e"
+
+	runner := &fakeRunner{}
+	cfg := Config{
+		CWEImage:         "ghcr.io/nvidia/nke/controller@" + digest,
+		ChartPath:        t.TempDir(),
+		PostgresPassword: "test-password",
+	}
+	if err := New(runner, nil).Deploy(context.Background(), "/tmp/kubeconfig", cfg); err != nil {
+		t.Fatalf("Deploy returned error: %v", err)
+	}
+
+	cwe := joinArgs(runner.calls[2].args)
+	if !strings.Contains(cwe, "image.repository=ghcr.io/nvidia/nke/controller") ||
+		!strings.Contains(cwe, "image.digest="+digest) {
+		t.Errorf("cwe call = %q, want the digest split into repository/digest", cwe)
 	}
 }

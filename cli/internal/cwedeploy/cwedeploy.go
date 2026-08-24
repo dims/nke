@@ -237,7 +237,10 @@ func (e *Engine) Deploy(ctx context.Context, kubeconfigPath string, cfg Config) 
 	}
 	defer cleanup()
 
-	imageRepo, imageTag := splitImageRef(cfg.CWEImage)
+	// Both are always set, empty when the reference carries neither: the
+	// chart reads an empty tag as "use appVersion" and an empty digest as
+	// "pull by tag".
+	imageRepo, imageTag, imageDigest := splitImageRef(cfg.CWEImage)
 	e.log.Info("installing cwe", "namespace", cweNamespace, "image", cfg.CWEImage, "chart", chartPath)
 	if _, err := e.helm(ctx, kubeconfigPath,
 		"upgrade", "--install", cweReleaseName, chartPath,
@@ -246,6 +249,7 @@ func (e *Engine) Deploy(ctx context.Context, kubeconfigPath string, cfg Config) 
 		"--set-string", "appDb.postgresPassword="+password,
 		"--set-string", "image.repository="+imageRepo,
 		"--set-string", "image.tag="+imageTag,
+		"--set-string", "image.digest="+imageDigest,
 		"--set-string", "image.pullPolicy=IfNotPresent",
 		"--wait", "--timeout", helmTimeout.String(),
 	); err != nil {
@@ -365,15 +369,23 @@ func resolveChartPath() (string, error) {
 	}
 }
 
-// splitImageRef splits "repo:tag" on the last colon, tolerating a
-// repo that itself contains a colon (a registry port, e.g.
-// "localhost:5000/controller:edge").
-func splitImageRef(ref string) (repo, tag string) {
+// splitImageRef splits "repo:tag", "repo@sha256:..." or "repo:tag@sha256:..."
+// into the parts the chart's image.repository/tag/digest values expect. The
+// digest comes off first, or the colon inside "sha256:..." reads as a tag
+// separator. A registry port ("localhost:5000/controller") is not a tag.
+func splitImageRef(ref string) (repo, tag, digest string) {
+	if idx := strings.LastIndex(ref, "@"); idx >= 0 {
+		digest = ref[idx+1:]
+		ref = ref[:idx]
+	}
 	idx := strings.LastIndex(ref, ":")
 	if idx < 0 || strings.Contains(ref[idx:], "/") {
-		return ref, "latest"
+		if digest != "" {
+			return ref, "", digest
+		}
+		return ref, "latest", ""
 	}
-	return ref[:idx], ref[idx+1:]
+	return ref[:idx], ref[idx+1:], digest
 }
 
 // randomPassword returns a 32-character hex string suitable for the shared
