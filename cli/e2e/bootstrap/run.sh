@@ -33,21 +33,26 @@
 #
 # NKECTL_BOOTSTRAP_PROVIDER selects the container runtime front end the
 # ephemeral cluster runs on (see cli/internal/bootstrapengine).
-# Defaults to "docker" here specifically: that is the path this suite has
-# actually verified end to end (including on the ubuntu-latest CI runner);
-# nerdctl is the package's default everywhere else and is exercised by the
-# package's own unit tests, but rootless/cgroup-v2 provisioning for a real
-# nerdctl+containerd runtime on the CI runner is not yet validated here.
-# Override to try it locally.
+# Defaults to "docker" here for a bare local run, since that is what a
+# checkout has without any extra setup. The CI workflow
+# (.github/workflows/nkectl-bootstrap-e2e.yml) now runs this script once per
+# provider in a matrix and exports NKECTL_BOOTSTRAP_PROVIDER explicitly for
+# each leg, exercising both docker and nerdctl end to end on the
+# ubuntu-latest runner rather than relying on this default. See that
+# workflow's own comments for how it stands up a standalone containerd for
+# the nerdctl leg, and why that leg is advisory (continue-on-error) rather
+# than required while it earns a track record. Override this var to try the
+# nerdctl provider locally too, once nerdctl/containerd are set up on the
+# host (see the workflow for the exact install this repo has verified).
 #
-# NKECTL_CWE_IMAGE must already be pulled locally (`docker pull`) before this
+# NKECTL_CWE_IMAGE must already be pulled locally, through whichever runtime
+# NKECTL_BOOTSTRAP_PROVIDER names (`docker pull`/`nerdctl pull`), before this
 # script runs -- nkectl loads it into the kind cluster via `kind load
 # docker-image` rather than pulling from inside the cluster (see
 # cmd/nkectl/bootstrap.go's ensureImageAvailable), so it does not itself need
-# registry credentials. The CI workflow logs in to nvcr.io and pulls the
-# image published by .github/workflows/image-nvcr.yml before invoking this
-# script; a local run needs the same `docker login nvcr.io` + `docker pull`
-# done by hand first.
+# registry credentials. The CI workflow logs in to GHCR and pulls the image
+# through the matching CLI for each leg before invoking this script; a local
+# run needs the same login + pull done by hand first.
 
 set -Eeuo pipefail
 
