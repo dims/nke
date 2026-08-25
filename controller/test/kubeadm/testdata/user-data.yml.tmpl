@@ -1,0 +1,60 @@
+#cloud-config
+# Phase 4 — kubeadm cluster bring-up: per-VM cloud-init.
+#
+# Templated by:
+#   - scripts/preflight-1vm.sh (Step 1; 1-VM sanity check)
+#   - the Go test driver in cmd/cluster-bringup (Step 2-3; the real 4-VM dance)
+#
+# Substitution placeholders (sed-style, matches kubeadm/tests/smoke/vm pattern):
+#   __HOSTNAME__                  per-VM name, e.g. preflight-1vm or vm-1
+#   __PASSWORD_HASH__             output of `openssl passwd -6 <pw>` for the nke user
+#   __NKE_APT_REPO_URL__          e.g. https://d1veq6e8nuk2fy.cloudfront.net/nke-apt-noble
+#   __NKE_APT_GPG_URL__           e.g. https://d1veq6e8nuk2fy.cloudfront.net/nke-apt-public.key
+#   __NKE_APT_SUITE__             nke-noble (NOT plain "noble" — verified against tests/apt-repo/run.sh)
+#   __NKE_APT_COMPONENT__         main
+#   __NKE_KUBEADM_DEB__           e.g. nke-kubeadm-distro-1.34.2
+#   __NKE_KUBEADM_DEB_VERSION__   e.g. 5 (pinned via apt =version)
+hostname: __HOSTNAME__
+phone_home:
+  url: http://169.254.169.254:7777/latest/meta-data/phone_home
+  post: all
+  tries: 10
+preserve_hostname: false
+manage_etc_hosts: true
+users:
+  - name: nke
+    groups: sudo
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: __PASSWORD_HASH__
+ssh_pwauth: true
+chpasswd:
+  expire: false
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+  - gnupg
+  - jq
+write_files:
+  - path: /etc/systemd/system/nke-agent.service.d/10-disable-mtls.conf
+    permissions: '0644'
+    content: |
+      # Phase 4 test override — runs nke-agent with plaintext gRPC on :50051.
+      # ExecStart= (empty) clears the base unit's command before overriding.
+      # Never use in production; consumed by tests/cluster-bringup/.
+      [Service]
+      ExecStart=
+      ExecStart=/usr/local/bin/nke-agent --disable-mtls --secure-server-port 50051
+runcmd:
+  # The plain Ubuntu cloud image has no NKE apt repo, so add one. The NKE node
+  # image already ships the repo (signed-by /etc/apt/keyrings/nke.asc); adding a
+  # second entry with a different signed-by keyring makes apt fail with
+  # "Conflicting values set for option Signed-By", so only add ours when the
+  # repo isn't already configured.
+  - bash -c 'if grep -Rqs "__NKE_APT_SUITE__" /etc/apt/sources.list.d/ /etc/apt/sources.list; then echo "NKE apt repo already present in image; using it"; else install -d -m 0755 /etc/apt/keyrings && curl -fsSL "__NKE_APT_GPG_URL__" | gpg --dearmor -o /etc/apt/keyrings/nke.gpg && echo "deb [signed-by=/etc/apt/keyrings/nke.gpg] __NKE_APT_REPO_URL__ __NKE_APT_SUITE__ __NKE_APT_COMPONENT__" > /etc/apt/sources.list.d/nke.list; fi'
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y __NKE_KUBEADM_DEB__=__NKE_KUBEADM_DEB_VERSION__ nke-agent
+  - systemctl daemon-reload
+  - systemctl restart nke-agent
