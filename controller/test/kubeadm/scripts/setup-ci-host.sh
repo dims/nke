@@ -389,30 +389,57 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 BASE_IMAGE="${NICO_VMS_BASE_IMAGE:-${REPO_ROOT}/controller/nico-vms/images/ubuntu-cloud.qcow2}"
+IMAGE_BASE_URL="${NKE_BRINGUP_IMAGE_BASE_URL:-https://cloud-images.ubuntu.com/releases/24.04/release}"
 case "${DEB_ARCH}" in
-  amd64) DEFAULT_IMAGE_URL="https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" ;;
-  arm64) DEFAULT_IMAGE_URL="https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img" ;;
+  amd64) IMAGE_NAME="ubuntu-24.04-server-cloudimg-amd64.img" ;;
+  arm64) IMAGE_NAME="ubuntu-24.04-server-cloudimg-arm64.img" ;;
   *) fail "unsupported architecture for the base image: ${DEB_ARCH}" ;;
 esac
-IMAGE_URL="${NKE_BRINGUP_BASE_IMAGE_URL:-${DEFAULT_IMAGE_URL}}"
+IMAGE_NAME="${NKE_BRINGUP_IMAGE_NAME:-${IMAGE_NAME}}"
 
 if [[ -s "${BASE_IMAGE}" ]] && qemu-img info "${BASE_IMAGE}" >/dev/null 2>&1; then
   log "Base image already present at ${BASE_IMAGE}"
 else
-  log "Fetching the base image from ${IMAGE_URL}"
+  log "Fetching ${IMAGE_NAME} from ${IMAGE_BASE_URL}"
   mkdir -p "$(dirname "${BASE_IMAGE}")"
-  # Download to a temporary name first: an interrupted transfer must not leave
-  # a truncated file that the check above would accept on a later run.
+
+  # Verify the download against the publisher's SHA256SUMS before booting it.
+  # We boot this image as a VM, so an unverified fetch is an unverified
+  # execution. Same pattern, and the same reasoning, as the actionlint install
+  # in .github/workflows/actionlint.yml: fetch the checksum list, look up this
+  # exact filename, compare, and fail closed on any mismatch or missing entry.
+  IMAGE_TMP="$(mktemp -d)"
+  # shellcheck disable=SC2064  # expand IMAGE_TMP now, not at trap time
+  trap "rm -rf '${IMAGE_TMP}'" EXIT
+
+  if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 120 \
+       -o "${IMAGE_TMP}/SHA256SUMS" "${IMAGE_BASE_URL}/SHA256SUMS"; then
+    fail "could not download SHA256SUMS from ${IMAGE_BASE_URL}"
+  fi
+
+  # Entries are "<sha256> *<filename>"; the star marks binary mode.
+  expected="$(awk -v n="${IMAGE_NAME}" '$2 == n || $2 == "*" n {print $1}' "${IMAGE_TMP}/SHA256SUMS" | head -1)"
+  [[ -n "${expected}" ]] || fail "no SHA256SUMS entry for ${IMAGE_NAME}"
+
   if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 900 \
-       -o "${BASE_IMAGE}.part" "${IMAGE_URL}"; then
-    rm -f "${BASE_IMAGE}.part"
-    fail "could not download the base image from ${IMAGE_URL}"
+       -o "${IMAGE_TMP}/${IMAGE_NAME}" "${IMAGE_BASE_URL}/${IMAGE_NAME}"; then
+    fail "could not download the base image from ${IMAGE_BASE_URL}/${IMAGE_NAME}"
   fi
-  if ! qemu-img info "${BASE_IMAGE}.part" >/dev/null 2>&1; then
-    rm -f "${BASE_IMAGE}.part"
-    fail "the downloaded base image is not a usable disk image"
+
+  actual="$(sha256sum "${IMAGE_TMP}/${IMAGE_NAME}" | awk '{print $1}')"
+  if [[ "${actual}" != "${expected}" ]]; then
+    fail "checksum mismatch for ${IMAGE_NAME}: expected ${expected}, got ${actual}"
   fi
-  mv "${BASE_IMAGE}.part" "${BASE_IMAGE}"
+  log "Checksum verified: ${IMAGE_NAME} sha256=${actual}"
+
+  qemu-img info "${IMAGE_TMP}/${IMAGE_NAME}" >/dev/null 2>&1 \
+    || fail "the downloaded base image is not a usable disk image"
+
+  # Move into place only after verification, so a failed run never leaves a
+  # file the idempotency check above would accept next time.
+  mv "${IMAGE_TMP}/${IMAGE_NAME}" "${BASE_IMAGE}"
+  rm -rf "${IMAGE_TMP}"
+  trap - EXIT
   log "Base image ready at ${BASE_IMAGE} ($(du -h "${BASE_IMAGE}" | cut -f1))"
 fi
 
