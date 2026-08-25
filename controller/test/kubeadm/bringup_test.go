@@ -60,8 +60,15 @@ func TestKubeadmBringup(t *testing.T) {
 
 	// No t.Deadline-derived context: the per-step timeouts below are the real
 	// budget, and `go test -timeout` remains the outer backstop.
+	//
+	// t.Cleanup, not defer: deferred calls run when the test function returns,
+	// BEFORE any t.Cleanup callback. Cancelling here with defer would kill the
+	// nico-vms subprocess (started with exec.CommandContext) while the cleanup
+	// that deletes the instances through its API is still to come, and those
+	// deletes would fail with "connection reset by peer". Registering first
+	// means it runs last, because cleanups run in reverse order.
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
 
 	specs := renderCloudInit(t, cfg, workDir)
 	proc := launchNicoVMS(ctx, t, cfg, workDir)

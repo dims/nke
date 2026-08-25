@@ -40,8 +40,14 @@ func TestNicoVMSSmoke(t *testing.T) {
 	workDir := resolveWorkDir(t, cfg)
 	t.Logf("work-dir: %s", workDir)
 
+	// t.Cleanup, not defer: deferred calls run when the test function returns,
+	// BEFORE any t.Cleanup callback. Cancelling here with defer would kill the
+	// nico-vms subprocess (it is started with exec.CommandContext) while the
+	// cleanup that deletes the instances through its API is still to come, and
+	// those deletes would fail with "connection reset by peer". Registering
+	// first means it runs last, because cleanups run in reverse order.
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
 
 	pubKey := generateSSHKey(t, workDir)
 	specs := make([]nicovms.NodeSpec, 2)
@@ -89,6 +95,17 @@ func TestNicoVMSSmoke(t *testing.T) {
 	// inside the first VM so the traffic genuinely crosses the bridge.
 	a, b := nodes[0], nodes[1]
 	keyPath := filepath.Join(workDir, "smoke_id_ed25519")
+
+	// nico-vms calls a VM Ready on a TCP probe of port 22, which is not the
+	// same as sshd being usable: cloud-init may still be installing our key,
+	// and under emulation the guest is slow enough that the SSH banner
+	// exchange itself can time out. Wait for a real handshake before drawing
+	// any conclusion about the network, or a slow guest looks like a broken
+	// bridge.
+	if err := sshWaitReady(ctx, t, keyPath, a.IP, 15*time.Minute); err != nil {
+		t.Fatalf("sshd on %s never became usable: %v", a.Name, err)
+	}
+
 	out, err := sshRun(ctx, keyPath, a.IP, fmt.Sprintf(
 		"ping -c3 -W5 %s && timeout 10 bash -c 'echo > /dev/tcp/%s/22' && echo VM_TO_VM_OK", b.IP, b.IP))
 	t.Logf("--- %s -> %s ---\n%s", a.Name, b.Name, out)
@@ -152,18 +169,48 @@ func generateSSHKey(t *testing.T, workDir string) string {
 // bridge, created seconds earlier by this test, with a key that exists only for
 // this run.
 func sshRun(ctx context.Context, keyPath, host, script string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "ssh",
 		"-i", keyPath,
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
-		"-o", "ConnectTimeout=15",
+		// 60s, not the usual 15: an emulated guest under load has been seen to
+		// accept the TCP connection and then miss the banner exchange deadline.
+		"-o", "ConnectTimeout=60",
 		"-o", "BatchMode=yes",
 		"nke@"+host, script)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// sshWaitReady blocks until sshd completes a handshake and accepts our key, or
+// the budget runs out. Distinguishes "the guest is still booting" from "the
+// network is broken", which a single attempt cannot.
+func sshWaitReady(ctx context.Context, t *testing.T, keyPath, host string, timeout time.Duration) error {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	attempt := 0
+	var last string
+	for time.Now().Before(deadline) {
+		attempt++
+		out, err := sshRun(ctx, keyPath, host, "true")
+		if err == nil {
+			t.Logf("ssh to %s usable after %d attempt(s)", host, attempt)
+			return nil
+		}
+		last = strings.TrimSpace(out)
+		if attempt%5 == 1 {
+			t.Logf("waiting for sshd on %s (attempt %d): %v: %s", host, attempt, err, last)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Second):
+		}
+	}
+	return fmt.Errorf("no successful handshake within %s (last output: %s)", timeout, last)
 }
 
 // dialWithRetry waits for a TCP endpoint to accept a connection. cloud-init may
