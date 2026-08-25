@@ -378,7 +378,45 @@ fi
 # kube-vip on a hardcoded BGP port 179. D7 boots vanilla noble from a local
 # seed ISO and D5 drops CNI, so no guest here asks for any of them.
 
-# ── 7. Summary ──────────────────────────────────────────────────────────────
+# ── 7. Base image ───────────────────────────────────────────────────────────
+#
+# nico-vms does NOT download this. It resolves NICO_VMS_BASE_IMAGE when an
+# instance is created and fails that reconcile with "no bootable image
+# available", which surfaces as an instance in state Error rather than as a
+# startup failure -- so a missing image looks like a broken VM, not a missing
+# file. Same URLs nico-vms' own integration tests use
+# (controller/nico-vms/test/integration/testutil/image.go:24-26).
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+BASE_IMAGE="${NICO_VMS_BASE_IMAGE:-${REPO_ROOT}/controller/nico-vms/images/ubuntu-cloud.qcow2}"
+case "${DEB_ARCH}" in
+  amd64) DEFAULT_IMAGE_URL="https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" ;;
+  arm64) DEFAULT_IMAGE_URL="https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img" ;;
+  *) fail "unsupported architecture for the base image: ${DEB_ARCH}" ;;
+esac
+IMAGE_URL="${NKE_BRINGUP_BASE_IMAGE_URL:-${DEFAULT_IMAGE_URL}}"
+
+if [[ -s "${BASE_IMAGE}" ]] && qemu-img info "${BASE_IMAGE}" >/dev/null 2>&1; then
+  log "Base image already present at ${BASE_IMAGE}"
+else
+  log "Fetching the base image from ${IMAGE_URL}"
+  mkdir -p "$(dirname "${BASE_IMAGE}")"
+  # Download to a temporary name first: an interrupted transfer must not leave
+  # a truncated file that the check above would accept on a later run.
+  if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 900 \
+       -o "${BASE_IMAGE}.part" "${IMAGE_URL}"; then
+    rm -f "${BASE_IMAGE}.part"
+    fail "could not download the base image from ${IMAGE_URL}"
+  fi
+  if ! qemu-img info "${BASE_IMAGE}.part" >/dev/null 2>&1; then
+    rm -f "${BASE_IMAGE}.part"
+    fail "the downloaded base image is not a usable disk image"
+  fi
+  mv "${BASE_IMAGE}.part" "${BASE_IMAGE}"
+  log "Base image ready at ${BASE_IMAGE} ($(du -h "${BASE_IMAGE}" | cut -f1))"
+fi
+
+# ── 8. Summary ──────────────────────────────────────────────────────────────
 
 log "Host ready. nico-vms should be run with:"
 log "  NICO_VMS_BRIDGE_NAME=${BRIDGE_NAME}"

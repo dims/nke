@@ -194,6 +194,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kubeadm-bringup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.NKE_BRINGUP_ARTIFACT_DIR }}/
+          # The smoke test generates a throwaway SSH keypair for VMs that no
+          # longer exist by upload time, but a private key still has no business
+          # in a downloadable artifact.
+          path: |
+            ${{ env.NKE_BRINGUP_ARTIFACT_DIR }}/
+            !${{ env.NKE_BRINGUP_ARTIFACT_DIR }}/**/smoke_id_ed25519
           if-no-files-found: warn
           retention-days: 7
