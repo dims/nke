@@ -16,7 +16,7 @@ import (
 
 // NodeSpec is one element of a batch CreateNodes call.
 type NodeSpec struct {
-	Name             string // VM hostname (also passed to forge-vms as the instance name)
+	Name             string // VM hostname (also passed to nico-vms as the instance name)
 	UserData         string // rendered cloud-init body (from internal/cloudinit.Render)
 	PhoneHomeEnabled bool   // typically true so "ready" == cloud-init done
 }
@@ -38,7 +38,7 @@ type Node struct {
 // they still need to invoke proc.DeleteNode for any IDs they got back from
 // a SUCCESSFUL CreateNodes return.
 //
-// forge-vms's libvirt backend handles parallel provisioning fine — concurrent
+// nico-vms's libvirt backend handles parallel provisioning fine — concurrent
 // disk overlay creation + virt-install calls don't conflict. ~3-5 min total
 // wall-clock for 4 VMs vs ~12-20 min sequentially.
 func (p *Process) CreateNodes(ctx context.Context, specs []NodeSpec) ([]Node, error) {
