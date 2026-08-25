@@ -242,6 +242,23 @@ jobs:
           # (internal/config/config.go:128) and a port already in use is fatal
           # to startup, which is how the GitLab arm64 leg broke.
           NICO_VMS_CONSOLE_SSH_PORT: "-1"
+          # Explicit, not inherited. This is already nico-vms' default
+          # (internal/config/config.go:160), but the single largest "does not
+          # work out of the box" defect we hit was an unexamined default (a
+          # relative seed path), so the URI is stated rather than assumed.
+          #
+          # session, not system: qemu:///system would need the process to be in
+          # the libvirt group, and `usermod -aG` does not take effect inside the
+          # single shell a job gets -- the same trap os-image-artifact.yml:138
+          # documents. Session mode instead runs QEMU unprivileged and attaches
+          # taps via the setuid qemu-bridge-helper, which setup-ci-host.sh
+          # allow-lists for this bridge.
+          #
+          # UNVERIFIED: session mode wants a logind session/XDG_RUNTIME_DIR, and
+          # no NKE job has ever run libvirt on these runners. If the first run
+          # fails at domain start, switching this to qemu:///system (plus
+          # running the binary under sudo -E) is the one-line fallback.
+          NICO_VMS_LIBVIRT_URI: qemu:///session
           # NKE_BRINGUP_*, not NICO_VMS_*: these are test-driver settings and
           # NICO_VMS_ is nico-vms' own namespace. They were flags on the
           # GitLab CLI driver; a `go test` has no flag surface, so they are
