@@ -246,7 +246,19 @@ jobs:
             sudo test -S "${CONTAINERD_ADDRESS}" && break
             sleep 1
           done
-          sudo test -S "${CONTAINERD_ADDRESS}" || { echo "::error::containerd-nerdctl never opened ${CONTAINERD_ADDRESS}"; exit 1; }
+          if ! sudo test -S "${CONTAINERD_ADDRESS}"; then
+            echo "::error::containerd-nerdctl never opened ${CONTAINERD_ADDRESS}"
+            echo "::group::containerd-nerdctl.service status"
+            sudo systemctl status containerd-nerdctl --no-pager -l || true
+            echo "::endgroup::"
+            echo "::group::containerd-nerdctl journal"
+            sudo journalctl -u containerd-nerdctl --no-pager || true
+            echo "::endgroup::"
+            echo "::group::/etc/containerd-nerdctl/config.toml"
+            sudo cat /etc/containerd-nerdctl/config.toml || true
+            echo "::endgroup::"
+            exit 1
+          fi
 
           sudo -E env "PATH=$PATH" nerdctl info
 
