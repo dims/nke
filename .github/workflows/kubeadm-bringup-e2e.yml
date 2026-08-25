@@ -1,0 +1,288 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Boots two VMs with nico-vms, runs `kubeadm init` on one and joins the other.
+#
+# What it proves, and nothing more: nico-vms can create real VMs on an NVIDIA
+# runner, and two of them can reach each other well enough for a kubeadm join.
+# Success is phase=initialize plus phase=join. No CNI, no NodesReady, and no
+# claim that the cluster is usable -- a join still has to complete a cross-VM
+# etcd and API round trip, which is the part no other lane here exercises.
+# One control plane and one worker, so there is no etcd quorum to flap.
+#
+# Advisory, and deliberately NOT a member of merge-gate.yml. Invariant 5 in
+# README.md:25-28 is explicit that work needing NVIDIA runners or privileged
+# infrastructure stays advisory, and this needs both: passwordless sudo to
+# build a host bridge and to setcap the binary. nico-e2e.yml:16-19 sets the
+# other half of the precedent -- a lane whose cost is unknown until it has run
+# a few times does not belong in the gate. Measure first, gate later.
+#
+# ⚠️ This runs under QEMU software emulation (TCG), roughly 10x slower than
+# hardware virtualisation. No runner group this repository can reach exposes
+# /dev/kvm; os-image-artifact.yml proved that at runtime, failing one tag on a
+# hard `/dev/kvm is missing` gate before it grew a TCG fallback. nico-vms falls
+# back the same way but SILENTLY: nico-vms' internal/vm/libvirt/virsh.go:248-253
+# is a bare os.Stat("/dev/kvm") choosing domain type "kvm" or "qemu", with no
+# log line either way. So this lane prints the accelerator itself, and every
+# run states which one it got. The timeouts below are all sized for the slow
+# path.
+#
+# Self-hosted runners never receive pull_request events. copy-pr-bot mirrors a
+# vetted pull request head to pull-request/<number>; the push of that same
+# commit is both the trigger and the security boundary, exactly as capd-e2e.yml
+# and nico-e2e.yml use it. An unvetted author gets no mirror branch and so no
+# run here, which is the point -- this job has root on the runner.
+#
+# Expect the first runs to fail. This is a probe with a test attached: the
+# deliverable is the answer about nico-vms on this fleet as much as the lane.
+# Dispatch it manually and read the logs before reading a red result as a
+# regression in the change under review.
+
+name: Kubeadm Bringup E2E
+
+on:
+  push:
+    branches:
+      - main
+      - "pull-request/[0-9]+"
+    paths:
+      - "controller/nico-vms/**"
+      - "controller/test/kubeadm/**"
+      # Without this, a change to the lane's own definition does not run it.
+      - .github/workflows/kubeadm-bringup-e2e.yml
+  workflow_dispatch:
+    inputs:
+      kubeadm_deb:
+        description: "NKE kubeadm distro package, e.g. nke-kubeadm-distro-1.36.3"
+        required: false
+        default: nke-kubeadm-distro-1.36.3
+      kubeadm_version:
+        description: "Pinned apt version of that package"
+        required: false
+        default: "6"
+
+permissions: {}
+
+concurrency:
+  # A literal name, NOT ${{ github.workflow }}. Inside a called workflow that
+  # expression is the CALLER's name, so any workflow merge-gate.yml calls would
+  # share a group with its siblings and cancel them; 8 of 9 calls died that way
+  # once, reported as failures with no jobs and no error message. This lane is
+  # not called by the gate today, and the literal is what keeps that true if it
+  # ever is. See merge-gate.yml:79-82.
+  #
+  # The sha is part of the group on main so back-to-back merges keep their
+  # results; pull-request refs share a group and cancel stale work.
+  group: Kubeadm Bringup E2E-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  bringup:
+    name: kubeadm bringup (2 VMs)
+    # Already in .github/actionlint.yaml:12's allowlist, so this needs no
+    # actionlint edit. Any other label would need one, and actionlint is a
+    # required gate member.
+    runs-on: linux-amd64-cpu16
+    if: github.repository == 'NVIDIA/nke'
+    # Sized for the emulated path, matching os-image-artifact.yml:58, the only
+    # other in-repo job that boots a VM. A hardware-accelerated run of this
+    # would be a fraction of it; TCG interprets every guest instruction, and
+    # two guests running kubeadm is a lot of instructions.
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    env:
+      # ⚠️ Load-bearing. nico-vms reaches mattn/go-sqlite3, which without cgo
+      # compiles to a stub that fails at the FIRST QUERY rather than at build
+      # time -- the binary would come out of `make build-privileged` looking
+      # fine and die the moment the test creates an instance. Same reason
+      # controller-test.yml:20-26 pins it, and a cross-compile disables cgo by
+      # default too, so this stays explicit rather than relying on a default.
+      CGO_ENABLED: "1"
+      # The bridge is the contract between setup-ci-host.sh, which creates it,
+      # and nico-vms, which attaches VM taps to it. Both read these, so they
+      # live at job scope and cannot drift apart. The values are the ones
+      # controller/nico-vms/scripts/setup-linux.sh:385-386 already uses.
+      #
+      # NICO_VMS_BRIDGE_CIDR has NO default in nico-vms -- its
+      # internal/config/config.go:164 is a bare os.Getenv -- so omitting it here
+      # is a startup failure, not a fallback.
+      NICO_VMS_BRIDGE_NAME: cwebr0
+      NICO_VMS_BRIDGE_CIDR: 172.30.0.0/24
+      # The CloudFront distribution in front of the NKE prod asset bucket. The
+      # GitLab cluster-bringup job used exactly this and overrode the in-code
+      # S3-origin default, so this is the path that has actually been proven to
+      # serve these packages. Note the bucket enforces a source-IP allowlist --
+      # see the reachability check below.
+      NKE_APT_BASE_URL: https://d1veq6e8nuk2fy.cloudfront.net
+      # Absolute, because the test driver runs the binary from the test's own
+      # working directory rather than from controller/nico-vms, and
+      # internal/config/config.go:165 defaults this to a relative path resolved
+      # against that working directory. The path is nico-vms' own convention for
+      # the cached Ubuntu cloud image
+      # (controller/nico-vms/test/integration/testutil/image.go:18-19, whose
+      # default URL is the Ubuntu 24.04 amd64 cloud image). setup-ci-host.sh
+      # owns fetching it to exactly this path; nico-vms will not download it.
+      NICO_VMS_BASE_IMAGE: ${{ github.workspace }}/controller/nico-vms/images/ubuntu-cloud.qcow2
+      # Where the test, the teardown script and the upload step meet. Under
+      # controller/.local/, which controller/.gitignore:38 already ignores, so
+      # a local run cannot leave the tree dirty.
+      NKE_BRINGUP_ARTIFACT_DIR: ${{ github.workspace }}/controller/.local/kubeadm-bringup/${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+
+      # Not a gate, and lifted from os-image-artifact.yml:134-143. nico-vms
+      # probes /dev/kvm itself and silently picks a domain type, so without
+      # this step a run gives no way to tell a 40-minute TCG boot from a
+      # hardware-accelerated one that hung. Print it once, at the top.
+      #
+      # FIXME: https://github.com/NVIDIA/nke/issues/219 -- move this job to a
+      # bare-metal runner and drop the emulated path, which costs ~10x.
+      - name: Report the accelerator
+        run: |
+          set -euo pipefail
+          if [[ -c /dev/kvm ]]; then
+            # Membership in group kvm does not apply until a new login.
+            sudo chmod 666 /dev/kvm
+            echo "::notice::/dev/kvm present; booting with hardware acceleration"
+          else
+            echo "::warning::/dev/kvm is missing on this runner; booting under QEMU software emulation (much slower)"
+          fi
+
+      # Installs QEMU and libvirt, creates the bridge above, and fetches
+      # NICO_VMS_BASE_IMAGE. A trimmed lift of nico-vms' scripts/setup-linux.sh
+      # networking half, with one deliberate omission: setup-linux.sh:399-403
+      # adds 169.254.169.254/32 to the bridge for VMs that expect EC2-style
+      # metadata. These runners ARE EC2 instances, so that address is the
+      # runner's own IMDS; claiming it locally hijacks the runner agent's
+      # credential refresh and fails in a way that looks nothing like a
+      # nico-vms bug. The vanilla Ubuntu image plus a local NoCloud seed needs
+      # no metadata server, so nothing here wants it.
+      #
+      # Invoked directly rather than through `bash`, as chart.yml:98 and
+      # agent-deb-publish.yml:255 do, so both scripts have to be committed
+      # executable.
+      # Before anything expensive. The VMs install the kubeadm distro and
+      # nke-agent from the NKE apt repo during cloud-init; if the runner cannot
+      # reach it, cloud-init does not fail loudly -- it retries until the agent
+      # readiness timeout expires, burning ~45 minutes to produce "nke-agent
+      # never came up", which points at entirely the wrong thing.
+      #
+      # This is a real risk, not a hypothetical. The NKE prod asset bucket and
+      # its CloudFront distribution enforce a source-IP allowlist: the same
+      # URLs return 200 from one NVIDIA egress address and 403 from another.
+      # These runners egress from a handful of fixed AWS NAT IPs in the
+      # nv-gha-runners account, and whether those are allowlisted is UNVERIFIED
+      # -- no NKE workflow has ever fetched from this repo. The first run of
+      # this lane is what settles it, so make the answer take ten seconds and
+      # be unmissable in the log.
+      - name: Check the NKE apt repo is reachable from this runner
+        run: |
+          set -euo pipefail
+          fail=0
+          for url in \
+            "${NKE_APT_BASE_URL}/nke-apt-noble/dists/nke-noble/Release" \
+            "${NKE_APT_BASE_URL}/nke-apt-public.key"
+          do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
+            echo "$code  $url"
+            [ "$code" = 200 ] || fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::The NKE apt repo is not reachable from this runner (egress $(curl -sS --max-time 15 https://ifconfig.me || echo unknown)). The VMs cannot install nke-kubeadm-distro or nke-agent, so the bring-up cannot succeed. If this is a 403, the bucket's source-IP allowlist does not include the nv-gha-runners NAT addresses and someone has to add them."
+            exit 1
+          fi
+
+      - name: Prepare the runner host
+        run: ./controller/test/kubeadm/scripts/setup-ci-host.sh
+
+      # build-privileged, not build: controller/nico-vms/Makefile:34-35 adds
+      # cap_net_admin to the binary, which bridge mode needs for `ip link`. It
+      # shells out to sudo setcap, which works here because these runners are
+      # ephemeral single-tenant EC2 VMs with passwordless sudo, not containers.
+      - name: Build nico-vms
+        run: make -C controller/nico-vms build-privileged
+
+      # -C controller because the suite lives inside the controller module
+      # (controller/test/kubeadm), which is what keeps go.work, every go.mod
+      # and vendor/ out of this change. The build tag is what makes the
+      # packages visible at all: without it `go list` matches nothing.
+      #
+      # -timeout 200m sits strictly below the 240-minute job timeout, so Go
+      # panics with a full goroutine dump and the teardown step still runs.
+      # A job-level timeout instead kills the runner mid-test and takes the
+      # diagnostics with it. -v because a silent 200-minute step is unreadable
+      # and this lane exists to be read.
+      #
+      # NICO_VMS_LIBVIRT_NETWORK is deliberately absent: nico-vms'
+      # internal/config/config.go:93 selects libvirt-network mode on its
+      # presence alone, and that mode exists for shared containerised hosts that
+      # must not create host networking of their own. This runner is the
+      # opposite case, and it already has the bridge.
+      - name: Run the kubeadm bringup suite
+        env:
+          # Every default below is sized for hardware virtualisation and is
+          # too small under TCG. Readiness defaults to 15m
+          # (nico-vms internal/config/config.go:101).
+          NICO_VMS_READINESS_TIMEOUT: 45m
+          # -1 disables the console SSH listener outright (nico-vms
+          # internal/app/app.go:80). The default is a fixed :2222
+          # (internal/config/config.go:128) and a port already in use is fatal
+          # to startup, which is how the GitLab arm64 leg broke.
+          NICO_VMS_CONSOLE_SSH_PORT: "-1"
+          # NKE_BRINGUP_*, not NICO_VMS_*: these are test-driver settings and
+          # NICO_VMS_ is nico-vms' own namespace. They were flags on the
+          # GitLab CLI driver; a `go test` has no flag surface, so they are
+          # environment variables with the same defaults.
+          NKE_BRINGUP_INIT_TIMEOUT: 45m
+          NKE_BRINGUP_JOIN_TIMEOUT: 30m
+          # Required: loadConfig fails fast without these three rather than
+          # booting two VMs and discovering the gap 20 minutes later.
+          NKE_BRINGUP_NICO_VMS_BIN: ${{ github.workspace }}/controller/nico-vms/bin/nico-vms
+          NKE_BRINGUP_KUBEADM_DEB: ${{ inputs.kubeadm_deb || 'nke-kubeadm-distro-1.36.3' }}
+          NKE_BRINGUP_KUBEADM_VERSION: ${{ inputs.kubeadm_version || '6' }}
+          # The apt repo the VMs install from. The in-code default is the S3
+          # origin; the GitLab job always overrode it with this CloudFront
+          # distribution, so it is what has actually been exercised.
+          NKE_BRINGUP_APT_REPO_URL: ${{ env.NKE_APT_BASE_URL }}/nke-apt-noble
+          NKE_BRINGUP_APT_GPG_URL: ${{ env.NKE_APT_BASE_URL }}/nke-apt-public.key
+          # Put the work dir INSIDE the artifact dir. Otherwise loadConfig falls
+          # back to a temp dir and the upload step collects the host
+          # diagnostics but not nico-vms.log, the rendered cloud-init or
+          # admin.conf -- which are the things worth reading after a failure.
+          NKE_BRINGUP_WORK_DIR: ${{ env.NKE_BRINGUP_ARTIFACT_DIR }}/work
+        run: go test -C controller -tags kubeadm_bringup -timeout 200m -v ./test/kubeadm/...
+
+      # Before the upload, not after: teardown is what copies the VM console
+      # logs out of nico-vms' working directory into the artifact directory.
+      # Best-effort by design -- a failure to remove a bridge must not turn a
+      # green bringup red, and must not skip the upload below.
+      - name: Tear down the runner host
+        if: always()
+        run: ./controller/test/kubeadm/scripts/teardown-ci-host.sh
+
+      # if-no-files-found: warn, unlike backend-e2e.yml:219. That lane gates
+      # its upload on a marker file and can demand the artifacts exist; the
+      # early runs here are expected to die before nico-vms writes anything,
+      # and a second red step reporting "no files" would only obscure the
+      # first one.
+      - name: Upload bringup diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kubeadm-bringup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.NKE_BRINGUP_ARTIFACT_DIR }}/
+          if-no-files-found: warn
+          retention-days: 7
