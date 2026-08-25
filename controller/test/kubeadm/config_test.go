@@ -117,18 +117,13 @@ func loadConfig(t *testing.T) config {
 		keepVMs:     os.Getenv("NKE_BRINGUP_KEEP_VMS") != "",
 	}
 
-	var missing []string
+	// Only the nico-vms binary is required here. The kubeadm settings are
+	// validated separately by requireKubeadmConfig, because the smoke test
+	// needs none of them: it boots stock Ubuntu and installs nothing, which is
+	// exactly what lets it run when the NKE apt repo is unreachable.
 	if c.nicoVMSBin == "" {
-		missing = append(missing, "NKE_BRINGUP_NICO_VMS_BIN (path to the nico-vms binary; build it with `CGO_ENABLED=1 make -C controller/nico-vms build-privileged`)")
-	}
-	if c.kubeadmDeb == "" {
-		missing = append(missing, "NKE_BRINGUP_KUBEADM_DEB (e.g. nke-kubeadm-distro-1.36.3)")
-	}
-	if c.kubeadmDebVersion == "" {
-		missing = append(missing, "NKE_BRINGUP_KUBEADM_VERSION (pinned apt version, e.g. 6)")
-	}
-	if len(missing) > 0 {
-		t.Fatalf("missing required configuration:\n  - %s", strings.Join(missing, "\n  - "))
+		t.Fatal("missing required configuration:\n" +
+			"  - NKE_BRINGUP_NICO_VMS_BIN (path to the nico-vms binary; build it with `CGO_ENABLED=1 make -C controller/nico-vms build-privileged`)")
 	}
 
 	abs, err := filepath.Abs(c.nicoVMSBin)
@@ -170,6 +165,24 @@ func loadConfig(t *testing.T) config {
 	}
 
 	return c
+}
+
+// requireKubeadmConfig validates the settings only the kubeadm bring-up needs.
+// Kept apart from loadConfig so the smoke test can run with neither of them
+// set, and so a missing package pin fails before two VMs are booted rather
+// than after.
+func requireKubeadmConfig(t *testing.T, c config) {
+	t.Helper()
+	var missing []string
+	if c.kubeadmDeb == "" {
+		missing = append(missing, "NKE_BRINGUP_KUBEADM_DEB (e.g. nke-kubeadm-distro-1.36.3)")
+	}
+	if c.kubeadmDebVersion == "" {
+		missing = append(missing, "NKE_BRINGUP_KUBEADM_VERSION (pinned apt version, e.g. 6)")
+	}
+	if len(missing) > 0 {
+		t.Fatalf("missing required configuration:\n  - %s", strings.Join(missing, "\n  - "))
+	}
 }
 
 // resolveWorkDir returns the directory for the nico-vms db, its log, the

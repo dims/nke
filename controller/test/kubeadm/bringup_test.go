@@ -54,6 +54,7 @@ const (
 
 func TestKubeadmBringup(t *testing.T) {
 	cfg := loadConfig(t)
+	requireKubeadmConfig(t, cfg)
 	workDir := resolveWorkDir(t, cfg)
 	t.Logf("work-dir: %s", workDir)
 
