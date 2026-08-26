@@ -10,7 +10,7 @@
 
 Module-specific docs live alongside their code:
 
-- `controller/docs/` — remote Colossus Tilt guide
+- `controller/docs/` — authenticating to the API, BYO OS, and the remote Colossus Tilt guide
 - `controller/AGENTS.md` — AI agent guide for CWE
 - `agent/docs/` — agent design and security notes
 - `agent/AGENTS.md` — AI agent guide for the node agent

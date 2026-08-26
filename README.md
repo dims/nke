@@ -80,6 +80,10 @@ make test
 make lint
 ```
 
+The agent runs on cluster nodes, so `make build` cross-compiles it for Linux on
+amd64 and arm64 and writes to `agent/bin/linux_*`. The tests and the lint run
+against your own machine, but on macOS the binaries it produces will not.
+
 **Build and test the controller:**
 
 ```bash
