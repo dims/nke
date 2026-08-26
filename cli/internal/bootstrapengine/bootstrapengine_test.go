@@ -251,6 +251,48 @@ func TestLoadImage_RequiresImage(t *testing.T) {
 	}
 }
 
+// TestLoadImage_NerdctlSavesArchiveInstead guards the bug this package used
+// to have: `kind load docker-image` always shells out to `docker` to read
+// the image, regardless of provider, so it fails with "not present locally"
+// for a nerdctl-pulled image even though it exists. Under nerdctl, LoadImage
+// must save the image itself and use `kind load image-archive` instead,
+// which has no such docker dependency.
+func TestLoadImage_NerdctlSavesArchiveInstead(t *testing.T) {
+	runner := &fakeRunner{
+		outputs: []fakeOutput{
+			{output: ""}, // nerdctl save
+			{output: ""}, // kind load image-archive
+		},
+	}
+	e := New(runner, nil)
+	if err := e.LoadImage(context.Background(), "test-cluster", ProviderNerdctl, "my-image:local"); err != nil {
+		t.Fatalf("LoadImage returned error: %v", err)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d: %+v", len(runner.calls), runner.calls)
+	}
+
+	saveCall := runner.calls[0]
+	if saveCall.name != "nerdctl" || joinArgs(saveCall.args[:1]) != "save" {
+		t.Errorf("call[0] = %s %s, want a `nerdctl save` call", saveCall.name, joinArgs(saveCall.args))
+	}
+	if len(saveCall.args) < 3 || saveCall.args[len(saveCall.args)-1] != "my-image:local" {
+		t.Errorf("call[0] args = %v, want the image as the last argument", saveCall.args)
+	}
+
+	loadCall := runner.calls[1]
+	if loadCall.name != "kind" || joinArgs(loadCall.args[:2]) != "load image-archive" {
+		t.Errorf("call[1] = %s %s, want a `kind load image-archive` call", loadCall.name, joinArgs(loadCall.args))
+	}
+	if got := loadCall.env[kindExperimentalProviderEnv]; got != "nerdctl" {
+		t.Errorf("%s = %q, want %q", kindExperimentalProviderEnv, got, "nerdctl")
+	}
+	// The archive path load's argument must be the same file save wrote to.
+	if len(loadCall.args) < 3 || loadCall.args[2] != saveCall.args[len(saveCall.args)-2] {
+		t.Errorf("kind load image-archive path %v does not match nerdctl save's -o path %v", loadCall.args, saveCall.args)
+	}
+}
+
 func TestRenderKindConfig_IncludesMountsAndPorts(t *testing.T) {
 	body, err := renderKindConfig(Config{
 		ClusterName: "test-cluster",

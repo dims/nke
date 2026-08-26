@@ -302,10 +302,21 @@ func (e *Engine) Kubeconfig(ctx context.Context, clusterName string, provider Pr
 }
 
 // LoadImage loads a locally built image into every node of clusterName.
-// Under both providers this goes through `kind load docker-image`: kind's
-// own provider abstraction (selected via KIND_EXPERIMENTAL_PROVIDER) routes
-// the load through nerdctl and containerd's content store when the nerdctl
-// provider is selected, rather than the Docker daemon.
+//
+// Under the Docker provider this goes through `kind load docker-image`,
+// which itself shells out to `docker` to read the image. Under any other
+// provider it does not: `kind load docker-image`'s "is the image present,
+// and what is its ID" and "save it to a tarball" steps are hardcoded to the
+// `docker` binary regardless of KIND_EXPERIMENTAL_PROVIDER — see
+// https://github.com/kubernetes-sigs/kind/blob/main/pkg/cmd/kind/load/docker-image/docker-image.go.
+// Only the final "load the tarball onto each node" step honors the
+// provider. An image pulled via `nerdctl pull` was never in Docker's own
+// image store, so `kind load docker-image` fails with "not present
+// locally" even though the image genuinely exists. `kind load
+// image-archive` has no such dependency: it just opens a tarball you
+// already produced and loads it via the provider abstraction, so under a
+// non-Docker provider this saves the image itself first and hands kind the
+// archive instead.
 func (e *Engine) LoadImage(ctx context.Context, clusterName string, provider Provider, image string) error {
 	if image == "" {
 		return fmt.Errorf("bootstrapengine: image is required")
@@ -313,14 +324,50 @@ func (e *Engine) LoadImage(ctx context.Context, clusterName string, provider Pro
 	if provider == "" {
 		provider = ProviderNerdctl
 	}
-	env := providerEnvMap(provider)
 	e.log.Info("loading image into bootstrap kind cluster",
 		"cluster", clusterName, "provider", provider, "image", image)
-	out, err := e.Runner.Run(ctx, env, "kind", "load", "docker-image", image, "--name", clusterName)
+
+	if provider == ProviderDocker {
+		out, err := e.Runner.Run(ctx, nil, "kind", "load", "docker-image", image, "--name", clusterName)
+		if err != nil {
+			return fmt.Errorf("kind load docker-image %s into %s (provider=%s): %w\n%s", image, clusterName, provider, err, out)
+		}
+		return nil
+	}
+
+	archivePath, cleanup, err := saveImageArchive(ctx, e.Runner, provider, image)
 	if err != nil {
-		return fmt.Errorf("kind load docker-image %s into %s (provider=%s): %w\n%s", image, clusterName, provider, err, out)
+		return err
+	}
+	defer cleanup()
+
+	env := providerEnvMap(provider)
+	out, err := e.Runner.Run(ctx, env, "kind", "load", "image-archive", archivePath, "--name", clusterName)
+	if err != nil {
+		return fmt.Errorf("kind load image-archive %s into %s (provider=%s): %w\n%s", image, clusterName, provider, err, out)
 	}
 	return nil
+}
+
+// saveImageArchive saves image to a temp tarball via provider's own CLI
+// (e.g. `nerdctl save`), the same way ensureImageAvailable in
+// cmd/nkectl/bootstrap.go already treats the provider name as the CLI
+// binary to run. The caller must call cleanup once done with the file.
+func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provider, image string) (path string, cleanup func(), err error) {
+	f, err := os.CreateTemp("", "nkectl-bootstrap-image-*.tar")
+	if err != nil {
+		return "", nil, fmt.Errorf("creating image archive for %s: %w", image, err)
+	}
+	archivePath := f.Name()
+	_ = f.Close()
+	cleanup = func() { _ = os.Remove(archivePath) }
+
+	cli := string(provider)
+	if out, err := runner.Run(ctx, nil, cli, "save", "-o", archivePath, image); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("%s save %s: %w\n%s", cli, image, err, out)
+	}
+	return archivePath, cleanup, nil
 }
 
 // providerEnvMap returns the environment overrides Run should apply for the
