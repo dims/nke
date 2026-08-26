@@ -72,7 +72,7 @@ func TestKubeadmBringup(t *testing.T) {
 
 	specs := renderCloudInit(t, cfg, workDir)
 	proc := launchNicoVMS(ctx, t, cfg, workDir)
-	nodes := createNodes(ctx, t, cfg, proc, specs)
+	nodes := createNodes(ctx, t, cfg, proc, workDir, specs)
 	waitForAgents(ctx, t, cfg, nodes)
 
 	cp, worker := nodes[initNode], nodes[workerNode]
@@ -207,7 +207,7 @@ func launchNicoVMS(ctx context.Context, t *testing.T, cfg config, workDir string
 	return proc
 }
 
-func createNodes(ctx context.Context, t *testing.T, cfg config, proc *nicovms.Process, specs []nicovms.NodeSpec) []nicovms.Node {
+func createNodes(ctx context.Context, t *testing.T, cfg config, proc *nicovms.Process, workDir string, specs []nicovms.NodeSpec) []nicovms.Node {
 	t.Helper()
 	t.Logf("creating %d VMs concurrently", len(specs))
 	nodes, err := proc.CreateNodes(ctx, specs)
@@ -220,6 +220,13 @@ func createNodes(ctx context.Context, t *testing.T, cfg config, proc *nicovms.Pr
 				t.Logf("NKE_BRINGUP_KEEP_VMS set — kept VM %s id=%s ip=%s", n.Name, n.InstanceID, n.IP)
 			}
 			return
+		}
+		// Deleting an instance removes its directory, and the serial-console
+		// logs live in there beside the disk overlay. They are the only record
+		// of what cloud-init and kubeadm did inside the VM, so save them before
+		// the delete or teardown finds nothing left to collect.
+		if t.Failed() {
+			saveConsoleLogs(t, workDir, nodes)
 		}
 		// context.Background deliberately: the test context is cancelled by
 		// the time cleanup runs, and the instances still have to be deleted.

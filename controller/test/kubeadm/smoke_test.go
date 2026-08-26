@@ -61,7 +61,7 @@ func TestNicoVMSSmoke(t *testing.T) {
 	}
 
 	proc := launchNicoVMS(ctx, t, cfg, workDir)
-	nodes := createNodes(ctx, t, cfg, proc, specs)
+	nodes := createNodes(ctx, t, cfg, proc, workDir, specs)
 
 	// createNodes already waits for Ready, which nico-vms decides with an SSH
 	// probe. Re-assert the properties we actually care about rather than

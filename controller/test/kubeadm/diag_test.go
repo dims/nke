@@ -7,9 +7,12 @@ package kubeadm
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/NVIDIA/nke/controller/test/kubeadm/internal/cluster"
+	"github.com/NVIDIA/nke/controller/test/kubeadm/internal/nicovms"
 )
 
 // On-VM post-mortems, run through the node-agent's ExecuteScript RPC rather
@@ -96,4 +99,37 @@ KUBECONFIG=/etc/kubernetes/admin.conf kubectl get nodes -o wide 2>&1 | head -10`
 		return
 	}
 	t.Logf("=== POST-MORTEM on control plane %s (etcd + reverse-net) ===\n%s", initName, out)
+}
+
+// saveConsoleLogs copies each VM's serial-console log out of its instance
+// directory, which deleting the instance removes.
+//
+// nico-vms builds the overlay as <workDir>/instances/<id>/disk.qcow2, and
+// libvirt writes <overlay>.ttyS0.log and .ttyS1.log beside it. The name carries
+// the instance ID so teardown-ci-host.sh can flatten them into one directory
+// without collisions.
+func saveConsoleLogs(t *testing.T, workDir string, nodes []nicovms.Node) {
+	t.Helper()
+	saved := 0
+	for _, n := range nodes {
+		dir := filepath.Join(workDir, "instances", n.InstanceID)
+		matches, err := filepath.Glob(filepath.Join(dir, "*.ttyS*.log"))
+		if err != nil || len(matches) == 0 {
+			continue
+		}
+		for _, src := range matches {
+			body, rerr := os.ReadFile(src)
+			if rerr != nil {
+				t.Logf("read console log %s: %v", src, rerr)
+				continue
+			}
+			dest := filepath.Join(workDir, n.InstanceID+"-"+n.Name+"-"+filepath.Base(src))
+			if werr := os.WriteFile(dest, body, 0o644); werr != nil {
+				t.Logf("save console log %s: %v", dest, werr)
+				continue
+			}
+			saved++
+		}
+	}
+	t.Logf("saved %d console log(s) into %s before deleting the instances", saved, workDir)
 }
