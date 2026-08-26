@@ -312,22 +312,67 @@ if [[ ${#UPSTREAM_DNS_ARGS[@]} -eq 0 ]]; then
 fi
 log "dnsmasq upstream DNS: ${UPSTREAM_DNS_ARGS[*]}"
 
+# Serving DNS on the gateway when something else already holds the port.
+#
+# --bind-interfaces binds ${BRIDGE_GW}:53 specifically, so any resolver already
+# listening on every interface takes that address and dnsmasq exits with
+# "failed to create listening socket ... Address already in use". A Bright
+# Cluster head node running named is one such host, and this script's header
+# promises a long-lived runner behaves like a fresh one.
+#
+# The guests cannot be pointed elsewhere: in static addressing mode nico-vms
+# writes the gateway as the only nameserver (nico-vms artifacts.go, the
+# network-config it bakes into the seed ISO), so a DHCP resolver option never
+# reaches them. Run dnsmasq on an alternative port instead and redirect port 53
+# arriving on the bridge to it. The other resolver keeps the port for the host,
+# and only guest queries are diverted.
+#
+# Try the port and react to the result, rather than checking whether it is free
+# first. The competing resolver binds the gateway when it notices the new
+# interface, which can be after any such check and before dnsmasq starts.
+ALT_DNS_PORT=5353
+
+start_dnsmasq() {
+  sudo dnsmasq \
+    --interface="${BRIDGE_NAME}" \
+    --bind-interfaces \
+    "$@" \
+    --dhcp-range="${DHCP_RANGE_START},${DHCP_RANGE_END},255.255.255.0,30m" \
+    --dhcp-hostsdir="${DHCP_HOSTS_DIR}" \
+    --dhcp-option=option:router,"${BRIDGE_GW}" \
+    --dhcp-option=option:dns-server,"${BRIDGE_GW}" \
+    --except-interface=lo \
+    --no-resolv \
+    --no-hosts \
+    "${UPSTREAM_DNS_ARGS[@]}" \
+    --dhcp-leasefile="${DHCP_LEASE_FILE}" \
+    --pid-file="${DNSMASQ_PID_FILE}" \
+    --log-dhcp \
+    --dhcp-ignore-clid
+}
+
 log "Starting dnsmasq on ${BRIDGE_NAME} (${DHCP_RANGE_START}-${DHCP_RANGE_END})..."
-sudo dnsmasq \
-  --interface="${BRIDGE_NAME}" \
-  --bind-interfaces \
-  --dhcp-range="${DHCP_RANGE_START},${DHCP_RANGE_END},255.255.255.0,30m" \
-  --dhcp-hostsdir="${DHCP_HOSTS_DIR}" \
-  --dhcp-option=option:router,"${BRIDGE_GW}" \
-  --dhcp-option=option:dns-server,"${BRIDGE_GW}" \
-  --except-interface=lo \
-  --no-resolv \
-  --no-hosts \
-  "${UPSTREAM_DNS_ARGS[@]}" \
-  --dhcp-leasefile="${DHCP_LEASE_FILE}" \
-  --pid-file="${DNSMASQ_PID_FILE}" \
-  --log-dhcp \
-  --dhcp-ignore-clid
+if ! start_dnsmasq 2>/tmp/dnsmasq-start.err; then
+  if ! grep -q "Address already in use" /tmp/dnsmasq-start.err; then
+    cat /tmp/dnsmasq-start.err >&2
+    fail "dnsmasq did not start"
+  fi
+  holder="$(sudo ss -lnup "sport = :53" 2>/dev/null | grep "${BRIDGE_GW}:53" |
+    grep -oE 'users:\(\("[^"]+"' | head -1 | tr -d 'users:(("')"
+  log "${BRIDGE_GW}:53 is held by ${holder:-another process}"
+  log "serving guest DNS on port ${ALT_DNS_PORT} and redirecting ${BRIDGE_NAME} port 53 to it"
+  for proto in udp tcp; do
+    if ! sudo iptables -t nat -C PREROUTING -i "${BRIDGE_NAME}" -p "${proto}" --dport 53 \
+      -j REDIRECT --to-ports "${ALT_DNS_PORT}" 2>/dev/null; then
+      sudo iptables -t nat -A PREROUTING -i "${BRIDGE_NAME}" -p "${proto}" --dport 53 \
+        -j REDIRECT --to-ports "${ALT_DNS_PORT}"
+    fi
+  done
+  ensure_bridge_input_rule -p udp --dport "${ALT_DNS_PORT}"
+  ensure_bridge_input_rule -p tcp --dport "${ALT_DNS_PORT}"
+  start_dnsmasq --port="${ALT_DNS_PORT}" || fail "dnsmasq did not start on port ${ALT_DNS_PORT} either"
+fi
+rm -f /tmp/dnsmasq-start.err
 log "dnsmasq started (pid=$(cat "${DNSMASQ_PID_FILE}"))"
 
 # ── 6. Forwarding and NAT ───────────────────────────────────────────────────

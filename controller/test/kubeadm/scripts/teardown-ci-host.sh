@@ -206,7 +206,11 @@ run_priv rm -rf "${DHCP_HOSTS_DIR}"
 while run_priv iptables -t nat -D POSTROUTING -s "${BRIDGE_CIDR}" ! -d "${BRIDGE_CIDR}" -j MASQUERADE 2>/dev/null; do :; done
 while run_priv iptables -D FORWARD -i "${BRIDGE_NAME}" -s "${BRIDGE_CIDR}" -j ACCEPT 2>/dev/null; do :; done
 while run_priv iptables -D FORWARD -o "${BRIDGE_NAME}" -d "${BRIDGE_CIDR}" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; do :; done
-for spec in "-p udp --dport 67" "-p udp --dport 53" "-p tcp --dport 53" "-p tcp --dport 7777"; do
+# Only present when setup found port 53 taken and moved guest DNS aside.
+for proto in udp tcp; do
+  while run_priv iptables -t nat -D PREROUTING -i "${BRIDGE_NAME}" -p "${proto}" --dport 53 -j REDIRECT --to-ports 5353 2>/dev/null; do :; done
+done
+for spec in "-p udp --dport 67" "-p udp --dport 53" "-p tcp --dport 53" "-p tcp --dport 7777" "-p udp --dport 5353" "-p tcp --dport 5353"; do
   # Word splitting is intended: each spec is a list of iptables arguments.
   # shellcheck disable=SC2086
   while run_priv iptables -D INPUT -i "${BRIDGE_NAME}" ${spec} -j ACCEPT 2>/dev/null; do :; done
