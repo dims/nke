@@ -24,14 +24,8 @@ import (
 // Required fields match the placeholder list in
 // cloud-init/user-data.yml.tmpl's header comment.
 type Vars struct {
-	Hostname             string // __HOSTNAME__
-	PasswordHash         string // __PASSWORD_HASH__   (output of `openssl passwd -6 ...`)
-	NkeAptRepoURL        string // __NKE_APT_REPO_URL__
-	NkeAptGpgURL         string // __NKE_APT_GPG_URL__
-	NkeAptSuite          string // __NKE_APT_SUITE__   (nke-noble, NOT noble)
-	NkeAptComponent      string // __NKE_APT_COMPONENT__
-	NkeKubeadmDeb        string // __NKE_KUBEADM_DEB__         e.g. nke-kubeadm-distro-1.34.2
-	NkeKubeadmDebVersion string // __NKE_KUBEADM_DEB_VERSION__ e.g. 5
+	Hostname     string // __HOSTNAME__
+	PasswordHash string // __PASSWORD_HASH__   (output of `openssl passwd -6 ...`)
 
 	// K8sProvision is the runcmd block that puts kubeadm, the kubelet and a
 	// container runtime on the node, already indented as YAML list items.
@@ -50,12 +44,6 @@ func (v Vars) Validate() error {
 	}
 	check("Hostname", v.Hostname)
 	check("PasswordHash", v.PasswordHash)
-	check("NkeAptRepoURL", v.NkeAptRepoURL)
-	check("NkeAptGpgURL", v.NkeAptGpgURL)
-	check("NkeAptSuite", v.NkeAptSuite)
-	check("NkeAptComponent", v.NkeAptComponent)
-	check("NkeKubeadmDeb", v.NkeKubeadmDeb)
-	check("NkeKubeadmDebVersion", v.NkeKubeadmDebVersion)
 	check("K8sProvision", v.K8sProvision)
 	if len(missing) > 0 {
 		return fmt.Errorf("cloudinit: required Vars fields empty: %s", strings.Join(missing, ", "))
@@ -77,12 +65,6 @@ func Render(templatePath string, vars Vars) (string, error) {
 	replacer := strings.NewReplacer(
 		"__HOSTNAME__", vars.Hostname,
 		"__PASSWORD_HASH__", vars.PasswordHash,
-		"__NKE_APT_REPO_URL__", vars.NkeAptRepoURL,
-		"__NKE_APT_GPG_URL__", vars.NkeAptGpgURL,
-		"__NKE_APT_SUITE__", vars.NkeAptSuite,
-		"__NKE_APT_COMPONENT__", vars.NkeAptComponent,
-		"__NKE_KUBEADM_DEB__", vars.NkeKubeadmDeb,
-		"__NKE_KUBEADM_DEB_VERSION__", vars.NkeKubeadmDebVersion,
 		"__K8S_PROVISION__", vars.K8sProvision,
 	)
 	out := replacer.Replace(string(raw))

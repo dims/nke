@@ -223,9 +223,9 @@ sudo ip link set "${BRIDGE_NAME}" up
 # and static-mode network-config bakes the address in directly
 # (artifacts.go:75-89), so no guest needs a metadata server to get onto the net.
 #
-# CAVEAT for the test driver, not for this script: testdata/user-data.yml.tmpl:19
-# points cloud-init's phone_home at http://169.254.169.254:7777/..., which will
-# now never answer. Readiness must therefore be gated on SSH rather than
+# CAVEAT for the test driver, not for this script: the phone_home block in
+# testdata/user-data.yml.tmpl points at http://169.254.169.254:7777/, which
+# will now never answer. Readiness must therefore be gated on SSH rather than
 # phone_home -- i.e. NodeSpec.PhoneHomeEnabled=false (multi.go:21) plus
 # cluster.WaitForAgent, which init.go:180-183 documents as exactly that path.
 

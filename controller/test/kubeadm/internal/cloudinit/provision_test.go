@@ -13,10 +13,6 @@ import (
 func base() Vars {
 	return Vars{
 		Hostname: "n1", PasswordHash: "$6$x$y",
-		NkeAptRepoURL: "https://example.invalid/nke-apt-noble",
-		NkeAptGpgURL:  "https://example.invalid/nke-apt-public.key",
-		NkeAptSuite:   "nke-noble", NkeAptComponent: "main",
-		NkeKubeadmDeb: "nke-kubeadm-distro-1.36.3", NkeKubeadmDebVersion: "6",
 	}
 }
 

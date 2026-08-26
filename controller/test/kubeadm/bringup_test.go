@@ -140,18 +140,21 @@ func TestKubeadmBringup(t *testing.T) {
 // into the work dir for post-mortem.
 func renderCloudInit(t *testing.T, cfg config, workDir string) []nicovms.NodeSpec {
 	t.Helper()
+
+	provision := cloudinit.AptProvision(
+		cfg.aptRepoURL, cfg.aptGpgURL, cfg.aptSuite, cfg.aptComp,
+		cfg.kubeadmDeb, cfg.kubeadmDebVersion)
+	if cfg.provisionMode == provisionCommunity {
+		provision = cloudinit.CommunityProvision(serveArtifacts(t, cfg))
+	}
+
 	specs := make([]nicovms.NodeSpec, nVMs)
 	for i := range specs {
 		name := fmt.Sprintf("vm-%d", i+1)
 		userData, err := cloudinit.Render(cfg.templatePath, cloudinit.Vars{
-			Hostname:             name,
-			PasswordHash:         cfg.sshPasswordHash,
-			NkeAptRepoURL:        cfg.aptRepoURL,
-			NkeAptGpgURL:         cfg.aptGpgURL,
-			NkeAptSuite:          cfg.aptSuite,
-			NkeAptComponent:      cfg.aptComp,
-			NkeKubeadmDeb:        cfg.kubeadmDeb,
-			NkeKubeadmDebVersion: cfg.kubeadmDebVersion,
+			Hostname:     name,
+			PasswordHash: cfg.sshPasswordHash,
+			K8sProvision: provision,
 		})
 		if err != nil {
 			t.Fatalf("render cloud-init for %s: %v", name, err)

@@ -15,14 +15,8 @@ import (
 // baseline for table-driven tests that blank out individual fields.
 func fullVars() Vars {
 	return Vars{
-		Hostname:             "test-vm",
-		PasswordHash:         "$6$rounds=4096$salt$hash",
-		NkeAptRepoURL:        "https://d1veq6e8nuk2fy.cloudfront.net/nke-apt-noble",
-		NkeAptGpgURL:         "https://d1veq6e8nuk2fy.cloudfront.net/nke-apt-public.key",
-		NkeAptSuite:          "nke-noble",
-		NkeAptComponent:      "main",
-		NkeKubeadmDeb:        "nke-kubeadm-distro-1.34.2",
-		NkeKubeadmDebVersion: "5",
+		Hostname:     "test-vm",
+		PasswordHash: "$6$rounds=4096$salt$hash",
 		K8sProvision: AptProvision(
 			"https://example.invalid/nke-apt-noble",
 			"https://example.invalid/nke-apt-public.key",
@@ -33,14 +27,8 @@ func fullVars() Vars {
 // fullVarsJammy returns a Vars populated with Ubuntu 22.04 (Jammy) apt values.
 func fullVarsJammy() Vars {
 	return Vars{
-		Hostname:             "test-vm",
-		PasswordHash:         "$6$rounds=4096$salt$hash",
-		NkeAptRepoURL:        "https://d1veq6e8nuk2fy.cloudfront.net/nke-apt-jammy",
-		NkeAptGpgURL:         "https://d1veq6e8nuk2fy.cloudfront.net/nke-apt-public.key",
-		NkeAptSuite:          "nke-jammy",
-		NkeAptComponent:      "main",
-		NkeKubeadmDeb:        "nke-kubeadm-distro-1.34.2",
-		NkeKubeadmDebVersion: "5",
+		Hostname:     "test-vm",
+		PasswordHash: "$6$rounds=4096$salt$hash",
 		K8sProvision: AptProvision(
 			"https://example.invalid/nke-apt-jammy",
 			"https://example.invalid/nke-apt-public.key",
@@ -55,12 +43,7 @@ func TestValidate_missing(t *testing.T) {
 	}{
 		{"Hostname", func(v *Vars) { v.Hostname = "" }},
 		{"PasswordHash", func(v *Vars) { v.PasswordHash = "" }},
-		{"NkeAptRepoURL", func(v *Vars) { v.NkeAptRepoURL = "" }},
-		{"NkeAptGpgURL", func(v *Vars) { v.NkeAptGpgURL = "" }},
-		{"NkeAptSuite", func(v *Vars) { v.NkeAptSuite = "" }},
-		{"NkeAptComponent", func(v *Vars) { v.NkeAptComponent = "" }},
-		{"NkeKubeadmDeb", func(v *Vars) { v.NkeKubeadmDeb = "" }},
-		{"NkeKubeadmDebVersion", func(v *Vars) { v.NkeKubeadmDebVersion = "" }},
+		{"K8sProvision", func(v *Vars) { v.K8sProvision = "" }},
 	}
 	for _, f := range fields {
 		t.Run(f.name, func(t *testing.T) {
@@ -75,7 +58,7 @@ func TestValidate_missing(t *testing.T) {
 
 func TestRender_substitutes(t *testing.T) {
 	tmpl := t.TempDir() + "/user-data.yml.tmpl"
-	content := "__HOSTNAME__ __PASSWORD_HASH__ __NKE_APT_REPO_URL__ __NKE_APT_GPG_URL__ __NKE_APT_SUITE__ __NKE_APT_COMPONENT__ __NKE_KUBEADM_DEB__ __NKE_KUBEADM_DEB_VERSION__"
+	content := "__HOSTNAME__ __PASSWORD_HASH__\n__K8S_PROVISION__"
 	if err := writeFile(tmpl, content); err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +70,7 @@ func TestRender_substitutes(t *testing.T) {
 	if strings.Contains(out, "__") {
 		t.Errorf("output still contains placeholders: %q", out)
 	}
-	for _, want := range []string{v.Hostname, v.PasswordHash, v.NkeAptRepoURL, v.NkeAptGpgURL,
-		v.NkeAptSuite, v.NkeAptComponent, v.NkeKubeadmDeb, v.NkeKubeadmDebVersion} {
+	for _, want := range []string{v.Hostname, v.PasswordHash, v.K8sProvision} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing value %q", want)
 		}
