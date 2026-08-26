@@ -353,6 +353,15 @@ func (e *Engine) LoadImage(ctx context.Context, clusterName string, provider Pro
 // (e.g. `nerdctl save`), the same way ensureImageAvailable in
 // cmd/nkectl/bootstrap.go already treats the provider name as the CLI
 // binary to run. The caller must call cleanup once done with the file.
+//
+// --all-platforms matches the flag kind's own LoadImageArchive passes to
+// `ctr images import` on the node (see
+// https://github.com/kubernetes-sigs/kind/blob/main/pkg/cluster/nodeutils/util.go).
+// Without it, `nerdctl save` writes only the current platform's content, but
+// the archive's OCI index still describes every platform in image's
+// manifest list; ctr then fails importing it with "content digest ... not
+// found" for the platforms that were never written. This repo's images are
+// multi-arch, so this is not a hypothetical case.
 func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provider, image string) (path string, cleanup func(), err error) {
 	f, err := os.CreateTemp("", "nkectl-bootstrap-image-*.tar")
 	if err != nil {
@@ -363,7 +372,7 @@ func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provid
 	cleanup = func() { _ = os.Remove(archivePath) }
 
 	cli := string(provider)
-	if out, err := runner.Run(ctx, nil, cli, "save", "-o", archivePath, image); err != nil {
+	if out, err := runner.Run(ctx, nil, cli, "save", "--all-platforms", "-o", archivePath, image); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("%s save %s: %w\n%s", cli, image, err, out)
 	}
