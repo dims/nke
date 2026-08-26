@@ -68,8 +68,17 @@ func initNodeDiag(ctx context.Context, t *testing.T, initName, initIP, otherIP s
 	t.Helper()
 	script := "#!/bin/bash\n" +
 		"set +e\n" +
+		// The agent runs scripts with its own PATH, which need not include the
+		// directory the Kubernetes tools landed in.
+		"export PATH=$PATH:/usr/local/bin:/usr/local/sbin\n" +
 		"OTHER=" + otherIP + "\n" +
-		`echo "=== reverse reachability: control plane -> $OTHER ==="
+		`echo "=== provisioning: are the tools even here? ==="
+for b in kubeadm kubelet kubectl containerd runc crictl; do
+  printf '%-11s %s\n' "$b" "$(command -v "$b" || echo MISSING)"
+done
+echo "=== cloud-init output (last 120) ==="
+tail -n 120 /var/log/cloud-init-output.log 2>&1
+echo "=== reverse reachability: control plane -> $OTHER ==="
 for p in 2379 2380 6443 10250; do
   timeout 5 bash -c "echo > /dev/tcp/$OTHER/$p" 2>/dev/null && echo "tcp $OTHER:$p OPEN" || echo "tcp $OTHER:$p UNREACHABLE"
 done
