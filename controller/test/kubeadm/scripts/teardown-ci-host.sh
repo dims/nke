@@ -39,6 +39,7 @@
 # Environment (all optional; defaults match setup-ci-host.sh):
 #   NICO_VMS_BRIDGE_NAME       bridge to remove          (default cwebr0)
 #   NICO_VMS_BRIDGE_CIDR       bridge subnet             (default 172.30.0.0/24)
+#   NICO_VMS_LIBVIRT_URI       libvirt connection        (default qemu:///session)
 #   NICO_VMS_DHCP_HOSTS_DIR    dnsmasq hostsdir          (default /var/lib/nico-vms/dhcp-hosts)
 #   NICO_VMS_DHCP_LEASE_FILE   dnsmasq lease file        (default /var/run/nico-vms-dnsmasq.leases)
 #   NICO_VMS_DB_PATH           nico-vms SQLite path; its directory is where the
@@ -57,6 +58,7 @@ BRIDGE_CIDR="${NICO_VMS_BRIDGE_CIDR:-172.30.0.0/24}"
 DHCP_HOSTS_DIR="${NICO_VMS_DHCP_HOSTS_DIR:-/var/lib/nico-vms/dhcp-hosts}"
 DHCP_LEASE_FILE="${NICO_VMS_DHCP_LEASE_FILE:-/var/run/nico-vms-dnsmasq.leases}"
 DNSMASQ_PID_FILE="/var/run/nico-vms-dnsmasq.pid"
+LIBVIRT_URI="${NICO_VMS_LIBVIRT_URI:-qemu:///session}"
 
 WORKSPACE="${GITHUB_WORKSPACE:-${PWD}}"
 ARTIFACT_DIR="${NKE_BRINGUP_ARTIFACT_DIR:-${WORKSPACE}/.ci-artifacts/kubeadm-bringup}"
@@ -133,7 +135,7 @@ dhcp_leases() {
   dump "iptables -S" run_priv iptables -S
   dump "running QEMU processes" qemu_processes
   dump "running nico-vms / dnsmasq processes" nicovms_processes
-  dump "virsh list --all (qemu:///session)" virsh -c qemu:///session list --all
+  dump "virsh list --all (${LIBVIRT_URI})" virsh -c "${LIBVIRT_URI}" list --all
   dump "dnsmasq leases" dhcp_leases
 } 2>&1 | tee "${DIAG_FILE}"
 
@@ -187,7 +189,29 @@ fi
 
 log "Artifact bundle ready at ${ARTIFACT_DIR}"
 
-# ── 3. Stop dnsmasq ─────────────────────────────────────────────────────────
+# ── 3. Remove the nico-vms domains ──────────────────────────────────────────
+# The suite deletes its instances through the nico-vms API, which stops each
+# VM but leaves the libvirt domain defined. A run that fails before its cleanup
+# leaves them running as well. On a long-lived runner they accumulate, and this
+# script's header promises such a runner behaves like a fresh one.
+#
+# Diagnostics above already ran, so nothing here destroys evidence. virsh runs
+# unprivileged on purpose: a session URI is per-user, so sudo would address
+# root's libvirt session rather than the one holding these domains.
+
+domains=0
+while IFS= read -r domain; do
+  [[ -n "${domain}" ]] || continue
+  virsh -c "${LIBVIRT_URI}" destroy "${domain}" >/dev/null 2>&1
+  virsh -c "${LIBVIRT_URI}" undefine "${domain}" --nvram >/dev/null 2>&1 ||
+    virsh -c "${LIBVIRT_URI}" undefine "${domain}" >/dev/null 2>&1
+  domains=$((domains + 1))
+done < <(virsh -c "${LIBVIRT_URI}" list --all --name 2>/dev/null | grep '^nico-vm-' || true)
+if [[ ${domains} -gt 0 ]]; then
+  log "Removed ${domains} nico-vms libvirt domain(s)"
+fi
+
+# ── 4. Stop dnsmasq ─────────────────────────────────────────────────────────
 
 if [[ -f "${DNSMASQ_PID_FILE}" ]]; then
   run_priv kill "$(cat "${DNSMASQ_PID_FILE}")" 2>/dev/null
@@ -198,7 +222,7 @@ run_priv pkill -f "dnsmasq.*--interface=${BRIDGE_NAME}" 2>/dev/null
 run_priv rm -f "${DHCP_LEASE_FILE}"
 run_priv rm -rf "${DHCP_HOSTS_DIR}"
 
-# ── 4. Remove the iptables rules ────────────────────────────────────────────
+# ── 5. Remove the iptables rules ────────────────────────────────────────────
 # Looping per rule clears accidental duplicates from repeated setup runs;
 # a missing rule just fails the first -D and ends the loop
 # (teardown-linux.sh:85-97 uses the same idiom).
@@ -217,7 +241,7 @@ for spec in "-p udp --dport 67" "-p udp --dport 53" "-p tcp --dport 53" "-p tcp 
 done
 log "Removed iptables rules for ${BRIDGE_NAME} / ${BRIDGE_CIDR}"
 
-# ── 5. Delete the bridge ────────────────────────────────────────────────────
+# ── 6. Delete the bridge ────────────────────────────────────────────────────
 # Deleting the interface takes its addresses and the connected-subnet route
 # with it, so there is nothing else to unwind.
 
