@@ -12,7 +12,7 @@ expected="$2"
 install_hint() {
   case "${tool}" in
     actionlint) echo "go install github.com/rhysd/actionlint/cmd/actionlint@v${expected#v}" ;;
-    kubeconform) echo "go install github.com/yannh/kubeconform/cmd/kubeconform@${expected}" ;;
+    kubeconform) echo "https://github.com/yannh/kubeconform/releases/tag/${expected}" ;;
     govulncheck) echo "go install golang.org/x/vuln/cmd/govulncheck@${expected}" ;;
     helm) echo "https://github.com/helm/helm/releases/tag/${expected}" ;;
     shellcheck) echo "https://github.com/koalaman/shellcheck/releases/tag/v${expected#v}" ;;
@@ -31,6 +31,7 @@ command -v "${tool}" >/dev/null 2>&1 || fail "${tool} is missing; expected ${exp
 case "${tool}" in
   actionlint)
     actual="$(actionlint -version 2>&1 | awk 'NR == 1 { print $1 }')"
+    actual="${actual#v}"
     ;;
   shellcheck)
     actual="$(shellcheck --version | awk '$1 == "version:" { print $2 }')"
