@@ -178,7 +178,7 @@ func TestExists(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runner := &fakeRunner{outputs: []fakeOutput{{output: tt.output, err: tt.err}}}
 			e := New(runner, nil)
-			got, err := e.Exists(context.Background(), "test-cluster")
+			got, err := e.Exists(context.Background(), "test-cluster", ProviderNerdctl)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected an error")
@@ -192,6 +192,40 @@ func TestExists(t *testing.T) {
 				t.Errorf("Exists = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestExists_ScopesQueryToProvider guards the bug this package used to have:
+// Exists and Kubeconfig ignored the provider argument entirely, so a cluster
+// created via ProviderNerdctl was invisible to a later Exists/Kubeconfig
+// call, which always queried the Docker provider (kind's default). Create's
+// own duplicate-cluster guard and kubeconfig fetch depend on this being
+// right — see bootstrapengine.go's Create for both call sites.
+func TestExists_ScopesQueryToProvider(t *testing.T) {
+	runner := &fakeRunner{outputs: []fakeOutput{{output: "test-cluster\n"}}}
+	e := New(runner, nil)
+	if _, err := e.Exists(context.Background(), "test-cluster", ProviderNerdctl); err != nil {
+		t.Fatalf("Exists returned error: %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(runner.calls))
+	}
+	if got := runner.calls[0].env[kindExperimentalProviderEnv]; got != "nerdctl" {
+		t.Errorf("%s = %q, want %q", kindExperimentalProviderEnv, got, "nerdctl")
+	}
+}
+
+func TestKubeconfig_ScopesQueryToProvider(t *testing.T) {
+	runner := &fakeRunner{outputs: []fakeOutput{{output: "apiVersion: v1\n"}}}
+	e := New(runner, nil)
+	if _, err := e.Kubeconfig(context.Background(), "test-cluster", ProviderNerdctl); err != nil {
+		t.Fatalf("Kubeconfig returned error: %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(runner.calls))
+	}
+	if got := runner.calls[0].env[kindExperimentalProviderEnv]; got != "nerdctl" {
+		t.Errorf("%s = %q, want %q", kindExperimentalProviderEnv, got, "nerdctl")
 	}
 }
 

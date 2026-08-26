@@ -182,7 +182,7 @@ func (e *Engine) Create(ctx context.Context, cfg Config) (*Cluster, error) {
 		cfg.Provider = ProviderNerdctl
 	}
 
-	exists, err := e.Exists(ctx, cfg.ClusterName)
+	exists, err := e.Exists(ctx, cfg.ClusterName, cfg.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (e *Engine) Create(ctx context.Context, cfg Config) (*Cluster, error) {
 		return nil, fmt.Errorf("kind create cluster %s (provider=%s): %w\n%s", cfg.ClusterName, cfg.Provider, err, out)
 	}
 
-	kubeconfigPath, err := e.Kubeconfig(ctx, cfg.ClusterName)
+	kubeconfigPath, err := e.Kubeconfig(ctx, cfg.ClusterName, cfg.Provider)
 	if err != nil {
 		// The cluster came up but we could not retrieve its kubeconfig —
 		// leave it running rather than silently deleting state the caller
@@ -249,9 +249,14 @@ func (e *Engine) Delete(ctx context.Context, clusterName string, provider Provid
 }
 
 // Exists reports whether a kind cluster named clusterName is currently
-// registered with kind.
-func (e *Engine) Exists(ctx context.Context, clusterName string) (bool, error) {
-	out, err := e.Runner.Run(ctx, nil, "kind", "get", "clusters")
+// registered with kind under provider. kind's cluster listing is scoped to
+// the provider that created it, the same way create/delete/load are — an
+// empty provider defaults to ProviderNerdctl like the rest of this package.
+func (e *Engine) Exists(ctx context.Context, clusterName string, provider Provider) (bool, error) {
+	if provider == "" {
+		provider = ProviderNerdctl
+	}
+	out, err := e.Runner.Run(ctx, providerEnvMap(provider), "kind", "get", "clusters")
 	if err != nil {
 		// kind returns exit code 1 with "No kind clusters found." on stderr
 		// when none exist — that is not a failure of the query itself.
@@ -270,9 +275,16 @@ func (e *Engine) Exists(ctx context.Context, clusterName string) (bool, error) {
 }
 
 // Kubeconfig returns the path to a kubeconfig file for clusterName, writing
-// it out via `kind get kubeconfig` if not already cached on disk.
-func (e *Engine) Kubeconfig(ctx context.Context, clusterName string) (string, error) {
-	out, err := e.Runner.Run(ctx, nil, "kind", "get", "kubeconfig", "--name", clusterName)
+// it out via `kind get kubeconfig` if not already cached on disk. provider
+// must match whatever provider created clusterName -- kind resolves a
+// cluster's nodes through its provider, so the wrong one reports the
+// cluster's nodes as missing even though it exists. An empty provider
+// defaults to ProviderNerdctl like the rest of this package.
+func (e *Engine) Kubeconfig(ctx context.Context, clusterName string, provider Provider) (string, error) {
+	if provider == "" {
+		provider = ProviderNerdctl
+	}
+	out, err := e.Runner.Run(ctx, providerEnvMap(provider), "kind", "get", "kubeconfig", "--name", clusterName)
 	if err != nil {
 		return "", fmt.Errorf("kind get kubeconfig %s: %w\n%s", clusterName, err, out)
 	}
