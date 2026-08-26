@@ -23,6 +23,10 @@ func fullVars() Vars {
 		NkeAptComponent:      "main",
 		NkeKubeadmDeb:        "nke-kubeadm-distro-1.34.2",
 		NkeKubeadmDebVersion: "5",
+		K8sProvision: AptProvision(
+			"https://example.invalid/nke-apt-noble",
+			"https://example.invalid/nke-apt-public.key",
+			"nke-noble", "main", "nke-kubeadm-distro-1.34.2", "5"),
 	}
 }
 
@@ -37,6 +41,10 @@ func fullVarsJammy() Vars {
 		NkeAptComponent:      "main",
 		NkeKubeadmDeb:        "nke-kubeadm-distro-1.34.2",
 		NkeKubeadmDebVersion: "5",
+		K8sProvision: AptProvision(
+			"https://example.invalid/nke-apt-jammy",
+			"https://example.invalid/nke-apt-public.key",
+			"nke-jammy", "main", "nke-kubeadm-distro-1.34.2", "5"),
 	}
 }
 

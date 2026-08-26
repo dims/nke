@@ -48,13 +48,11 @@ write_files:
       ExecStart=
       ExecStart=/usr/local/bin/nke-agent --disable-mtls --secure-server-port 50051
 runcmd:
-  # The plain Ubuntu cloud image has no NKE apt repo, so add one. The NKE node
-  # image already ships the repo (signed-by /etc/apt/keyrings/nke.asc); adding a
-  # second entry with a different signed-by keyring makes apt fail with
-  # "Conflicting values set for option Signed-By", so only add ours when the
-  # repo isn't already configured.
-  - bash -c 'if grep -Rqs "__NKE_APT_SUITE__" /etc/apt/sources.list.d/ /etc/apt/sources.list; then echo "NKE apt repo already present in image; using it"; else install -d -m 0755 /etc/apt/keyrings && curl -fsSL "__NKE_APT_GPG_URL__" | gpg --dearmor -o /etc/apt/keyrings/nke.gpg && echo "deb [signed-by=/etc/apt/keyrings/nke.gpg] __NKE_APT_REPO_URL__ __NKE_APT_SUITE__ __NKE_APT_COMPONENT__" > /etc/apt/sources.list.d/nke.list; fi'
-  - apt-get update
-  - DEBIAN_FRONTEND=noninteractive apt-get install -y __NKE_KUBEADM_DEB__=__NKE_KUBEADM_DEB_VERSION__ nke-agent
+  # How kubeadm, the kubelet and a container runtime get onto the node. The
+  # block is built in Go: cloudinit.AptProvision for the NKE apt repository, or
+  # cloudinit.CommunityProvision for upstream releases plus a host-served
+  # nke-agent .deb, which is what a runner outside the repository's allow list
+  # has to use.
+__K8S_PROVISION__
   - systemctl daemon-reload
   - systemctl restart nke-agent

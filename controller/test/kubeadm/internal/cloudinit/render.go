@@ -32,6 +32,12 @@ type Vars struct {
 	NkeAptComponent      string // __NKE_APT_COMPONENT__
 	NkeKubeadmDeb        string // __NKE_KUBEADM_DEB__         e.g. nke-kubeadm-distro-1.34.2
 	NkeKubeadmDebVersion string // __NKE_KUBEADM_DEB_VERSION__ e.g. 5
+
+	// K8sProvision is the runcmd block that puts kubeadm, the kubelet and a
+	// container runtime on the node, already indented as YAML list items.
+	// AptProvision() builds the NKE apt repository form; CommunityProvision()
+	// builds the upstream form for hosts that cannot reach that repository.
+	K8sProvision string // __K8S_PROVISION__
 }
 
 // Validate returns an error listing any required fields that are empty.
@@ -50,6 +56,7 @@ func (v Vars) Validate() error {
 	check("NkeAptComponent", v.NkeAptComponent)
 	check("NkeKubeadmDeb", v.NkeKubeadmDeb)
 	check("NkeKubeadmDebVersion", v.NkeKubeadmDebVersion)
+	check("K8sProvision", v.K8sProvision)
 	if len(missing) > 0 {
 		return fmt.Errorf("cloudinit: required Vars fields empty: %s", strings.Join(missing, ", "))
 	}
@@ -76,6 +83,7 @@ func Render(templatePath string, vars Vars) (string, error) {
 		"__NKE_APT_COMPONENT__", vars.NkeAptComponent,
 		"__NKE_KUBEADM_DEB__", vars.NkeKubeadmDeb,
 		"__NKE_KUBEADM_DEB_VERSION__", vars.NkeKubeadmDebVersion,
+		"__K8S_PROVISION__", vars.K8sProvision,
 	)
 	out := replacer.Replace(string(raw))
 	if strings.Contains(out, "__") {
@@ -92,4 +100,38 @@ func Render(templatePath string, vars Vars) (string, error) {
 		}
 	}
 	return out, nil
+}
+
+// AptProvision returns the runcmd block that installs the Kubernetes stack from
+// the NKE apt repository. This is what the lane used before, kept because it is
+// the right path on a host that can reach that repository.
+//
+// The plain Ubuntu cloud image has no NKE apt repo, so add one. The NKE node
+// image already ships it signed-by /etc/apt/keyrings/nke.asc, and a second entry
+// with a different keyring makes apt fail with "Conflicting values set for
+// option Signed-By", so only add ours when it is absent.
+func AptProvision(repoURL, gpgURL, suite, component, deb, debVersion string) string {
+	return "  - bash -c 'if grep -Rqs \"" + suite + "\" /etc/apt/sources.list.d/ /etc/apt/sources.list; then" +
+		" echo \"NKE apt repo already present in image; using it\"; else" +
+		" install -d -m 0755 /etc/apt/keyrings && curl -fsSL \"" + gpgURL + "\" |" +
+		" gpg --dearmor -o /etc/apt/keyrings/nke.gpg &&" +
+		" echo \"deb [signed-by=/etc/apt/keyrings/nke.gpg] " + repoURL + " " + suite + " " + component + "\"" +
+		" > /etc/apt/sources.list.d/nke.list; fi'\n" +
+		"  - apt-get update\n" +
+		"  - DEBIAN_FRONTEND=noninteractive apt-get install -y " + deb + "=" + debVersion + " nke-agent"
+}
+
+// CommunityProvision returns the runcmd block that installs the same stack from
+// upstream releases, and nke-agent from a .deb the host serves.
+//
+// The NKE apt repository is behind a source-IP allow list that GitHub runners
+// are outside of. Everything that repository's kubeadm package ships is an
+// upstream release, and the agent resolves its tools with exec.LookPath, so
+// fetching them directly gives the agent the same thing. Both URLs are served by
+// the test host, which needs no NVIDIA network.
+func CommunityProvision(provisionScriptURL, agentDebURL string) string {
+	return "  - curl -fsSL --retry 3 -o /tmp/install-k8s.sh " + provisionScriptURL + "\n" +
+		"  - bash /tmp/install-k8s.sh\n" +
+		"  - curl -fsSL --retry 3 -o /tmp/nke-agent.deb " + agentDebURL + "\n" +
+		"  - DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/nke-agent.deb"
 }
