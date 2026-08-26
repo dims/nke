@@ -106,7 +106,7 @@ func TestRender_unresolved(t *testing.T) {
 // where someone adds a new placeholder to the .tmpl without adding the
 // corresponding field to Vars (and its substitution in Render).
 func TestRender_realTemplate(t *testing.T) {
-	out, err := Render("../../cloud-init/user-data.yml.tmpl", fullVars())
+	out, err := Render("../../testdata/user-data.yml.tmpl", fullVars())
 	if err != nil {
 		t.Fatalf("Render() error: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestRender_realTemplate(t *testing.T) {
 }
 
 func TestRender_realTemplate_jammy(t *testing.T) {
-	out, err := Render("../../cloud-init/user-data.yml.tmpl", fullVarsJammy())
+	out, err := Render("../../testdata/user-data.yml.tmpl", fullVarsJammy())
 	if err != nil {
 		t.Fatalf("Render() error: %v", err)
 	}
