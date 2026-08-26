@@ -43,6 +43,9 @@ const (
 	defaultAptSuite   = "nke-noble" // NOT plain "noble"
 	defaultAptComp    = "main"
 
+	// nico-vms's own default bridge subnet.
+	defaultBridgeCIDR = "172.30.0.0/24"
+
 	// Non-overlapping with nico-vms's own bridge subnet (172.30.0.0/24).
 	defaultPodCIDR     = "10.244.0.0/16"
 	defaultServiceCIDR = "10.96.0.0/12"
@@ -120,14 +123,18 @@ func loadConfig(t *testing.T) config {
 		kubeadmDebVersion: os.Getenv("NKE_BRINGUP_KUBEADM_VERSION"),
 		nodeImageURL:      os.Getenv("NKE_BRINGUP_NODE_IMAGE_URL"),
 		workDir:           os.Getenv("NKE_BRINGUP_WORK_DIR"),
-		bridgeName:        os.Getenv("NKE_BRINGUP_BRIDGE_NAME"),
-		bridgeCIDR:        os.Getenv("NKE_BRINGUP_BRIDGE_CIDR"),
-		aptRepoURL:        envOr("NKE_BRINGUP_APT_REPO_URL", defaultAptRepoURL),
-		aptGpgURL:         envOr("NKE_BRINGUP_APT_GPG_URL", defaultAptGpgURL),
-		aptSuite:          envOr("NKE_BRINGUP_APT_SUITE", defaultAptSuite),
-		aptComp:           envOr("NKE_BRINGUP_APT_COMPONENT", defaultAptComp),
-		podCIDR:           envOr("NKE_BRINGUP_POD_CIDR", defaultPodCIDR),
-		serviceCIDR:       envOr("NKE_BRINGUP_SERVICE_CIDR", defaultServiceCIDR),
+		bridgeName:        envOr("NKE_BRINGUP_BRIDGE_NAME", os.Getenv("NICO_VMS_BRIDGE_NAME")),
+		// The guests sit on nico-vms's bridge, so its CIDR is the one that
+		// gives the address they can reach the host on. Read the NICO_VMS_
+		// value rather than making the caller repeat it.
+		bridgeCIDR: envOr("NKE_BRINGUP_BRIDGE_CIDR",
+			envOr("NICO_VMS_BRIDGE_CIDR", defaultBridgeCIDR)),
+		aptRepoURL:  envOr("NKE_BRINGUP_APT_REPO_URL", defaultAptRepoURL),
+		aptGpgURL:   envOr("NKE_BRINGUP_APT_GPG_URL", defaultAptGpgURL),
+		aptSuite:    envOr("NKE_BRINGUP_APT_SUITE", defaultAptSuite),
+		aptComp:     envOr("NKE_BRINGUP_APT_COMPONENT", defaultAptComp),
+		podCIDR:     envOr("NKE_BRINGUP_POD_CIDR", defaultPodCIDR),
+		serviceCIDR: envOr("NKE_BRINGUP_SERVICE_CIDR", defaultServiceCIDR),
 		sshPasswordHash: envOr("NKE_BRINGUP_SSH_PASSWORD_HASH",
 			"$6$nke-cluster-bringup$KrSrwhFvUJrjMqlVELHsBSx5G1QO8RtNyG8GP6Jrh3.dRgCWQ8GgY79hCsLwlcMz1F0VfeyzL6lJEhwYO5Ay00"),
 		initTimeout: envDuration(t, "NKE_BRINGUP_INIT_TIMEOUT", defaultInitTimeout),
