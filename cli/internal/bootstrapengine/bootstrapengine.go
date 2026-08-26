@@ -30,6 +30,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -354,14 +355,20 @@ func (e *Engine) LoadImage(ctx context.Context, clusterName string, provider Pro
 // cmd/nkectl/bootstrap.go already treats the provider name as the CLI
 // binary to run. The caller must call cleanup once done with the file.
 //
-// --all-platforms matches the flag kind's own LoadImageArchive passes to
-// `ctr images import` on the node (see
-// https://github.com/kubernetes-sigs/kind/blob/main/pkg/cluster/nodeutils/util.go).
-// Without it, `nerdctl save` writes only the current platform's content, but
-// the archive's OCI index still describes every platform in image's
-// manifest list; ctr then fails importing it with "content digest ... not
-// found" for the platforms that were never written. This repo's images are
-// multi-arch, so this is not a hypothetical case.
+// Saves a single, explicit platform (the host's) rather than every platform
+// in the image's manifest -- deliberately narrower than --all-platforms.
+// This repo's images are multi-arch and built with the attestation/SBOM
+// manifests Buildx attaches by default; those show up as extra entries in
+// the manifest list under platform "unknown/unknown", not a real platform.
+// --all-platforms makes nerdctl try to ensure (fetch, if missing) content
+// for every entry including those, and nerdctl's own fetch path for that
+// entry fails with "content digest ... not found" rather than skipping it.
+// An explicit --platform scopes both what nerdctl ensures locally and what
+// it writes into the archive to that one real platform, so the
+// attestation entries are never touched. kind's own node-side import (`ctr
+// images import --all-platforms`, hardcoded in kind and not something this
+// package controls) then only has that one platform to resolve, which is
+// what "load a locally built image onto one Linux node" needs anyway.
 func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provider, image string) (path string, cleanup func(), err error) {
 	f, err := os.CreateTemp("", "nkectl-bootstrap-image-*.tar")
 	if err != nil {
@@ -372,7 +379,8 @@ func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provid
 	cleanup = func() { _ = os.Remove(archivePath) }
 
 	cli := string(provider)
-	if out, err := runner.Run(ctx, nil, cli, "save", "--all-platforms", "-o", archivePath, image); err != nil {
+	platform := runtime.GOOS + "/" + runtime.GOARCH
+	if out, err := runner.Run(ctx, nil, cli, "save", "--platform", platform, "-o", archivePath, image); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("%s save %s: %w\n%s", cli, image, err, out)
 	}
