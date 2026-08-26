@@ -152,6 +152,11 @@ ssh_pwauth: false
 func generateSSHKey(t *testing.T, workDir string) string {
 	t.Helper()
 	keyPath := filepath.Join(workDir, "smoke_id_ed25519")
+	// ssh-keygen asks before overwriting, and with no terminal the prompt just
+	// fails the run. A caller-supplied work dir is kept on exit, so the second
+	// run in one directory would hit this every time.
+	_ = os.Remove(keyPath)
+	_ = os.Remove(keyPath + ".pub")
 	cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-q",
 		"-C", "nke-nico-vms-smoke", "-f", keyPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
