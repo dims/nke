@@ -390,6 +390,11 @@ func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provid
 //
 // A digest reference is already one manifest, and `tag` cannot target one, so
 // it is left alone.
+//
+// Pulls the platform manifest by digest before retagging (see the comment on
+// that call below) -- without it, `tag` fails with "not found" for a digest
+// `image inspect` just resolved, confirmed against a real nerdctl-provider
+// CI run: https://github.com/NVIDIA/nke/actions/runs/33088745329.
 func flattenToHostPlatform(ctx context.Context, runner CommandRunner, cli, image string) error {
 	repo, ok := repoOfTaggedRef(image)
 	if !ok {
@@ -413,10 +418,26 @@ func flattenToHostPlatform(ctx context.Context, runner CommandRunner, cli, image
 		return nil
 	}
 
+	// `tag` resolves its source by looking up an existing named image entry
+	// in the image store, not by walking arbitrary content-store blobs. The
+	// plain pull that got image here only registered the index itself
+	// (target, above) as a named entry -- the platform manifest content
+	// exists (image inspect's ManifestDesc walk finds it), but nothing has
+	// registered it as an image nerdctl can address by name, so `tag`
+	// reports "not found" for it even though `inspect` just resolved it.
+	// Pulling the digest directly registers it as its own image entry --
+	// its layers are already in the local content store under the same
+	// digests, so this only fetches the small manifest JSON, not the image
+	// again -- which the following tag can then find.
+	digestRef := repo + "@" + manifest
+	if out, err := runner.Run(ctx, nil, cli, "pull", digestRef); err != nil {
+		return fmt.Errorf("%s pull %s: %w\n%s", cli, digestRef, err, out)
+	}
+
 	// Retag image itself, not a new name: the node must end up holding the
 	// reference the pod spec asks for.
-	if out, err := runner.Run(ctx, nil, cli, "tag", repo+"@"+manifest, image); err != nil {
-		return fmt.Errorf("%s tag %s@%s %s: %w\n%s", cli, repo, manifest, image, err, out)
+	if out, err := runner.Run(ctx, nil, cli, "tag", digestRef, image); err != nil {
+		return fmt.Errorf("%s tag %s %s: %w\n%s", cli, digestRef, image, err, out)
 	}
 	return nil
 }

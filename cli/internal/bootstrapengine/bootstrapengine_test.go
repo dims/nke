@@ -337,9 +337,10 @@ func TestLoadImage_NerdctlFlattensMultiArchTag(t *testing.T) {
 		// Two lines: the tag and its digest name are both store entries.
 		// Target is the index, so there is something to flatten.
 		{output: indexDigest + " " + hostManifestDigest + "\n" + indexDigest + " " + hostManifestDigest + "\n"},
-		{output: ""},
-		{output: ""},
-		{output: ""},
+		{output: ""}, // pull <repo>@<manifest digest>
+		{output: ""}, // tag
+		{output: ""}, // nerdctl save
+		{output: ""}, // kind load image-archive
 	}}
 	e := New(runner, nil)
 	const ref = "ghcr.io/nvidia/nke/controller:v0.1.1-rc.2"
@@ -351,10 +352,17 @@ func TestLoadImage_NerdctlFlattensMultiArchTag(t *testing.T) {
 	if inspect.name != "nerdctl" || joinArgs(inspect.args[:4]) != "image inspect --mode=native --format" {
 		t.Fatalf("call[0] = %s %s, want `nerdctl image inspect --mode=native`", inspect.name, joinArgs(inspect.args))
 	}
-	tag := runner.calls[1]
-	want := "tag ghcr.io/nvidia/nke/controller@" + hostManifestDigest + " " + ref
+
+	digestRef := "ghcr.io/nvidia/nke/controller@" + hostManifestDigest
+	pull := runner.calls[1]
+	if pull.name != "nerdctl" || joinArgs(pull.args) != "pull "+digestRef {
+		t.Errorf("call[1] = %s %s, want %q", pull.name, joinArgs(pull.args), "pull "+digestRef)
+	}
+
+	tag := runner.calls[2]
+	want := "tag " + digestRef + " " + ref
 	if tag.name != "nerdctl" || joinArgs(tag.args) != want {
-		t.Errorf("call[1] = %s %s, want %q", tag.name, joinArgs(tag.args), want)
+		t.Errorf("call[2] = %s %s, want %q", tag.name, joinArgs(tag.args), want)
 	}
 }
 
