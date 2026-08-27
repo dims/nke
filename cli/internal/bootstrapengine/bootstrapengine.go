@@ -356,19 +356,25 @@ func (e *Engine) LoadImage(ctx context.Context, clusterName string, provider Pro
 // binary to run. The caller must call cleanup once done with the file.
 //
 // Saves a single, explicit platform (the host's) rather than every platform
-// in the image's manifest -- deliberately narrower than --all-platforms.
-// This repo's images are multi-arch and built with the attestation/SBOM
-// manifests Buildx attaches by default; those show up as extra entries in
-// the manifest list under platform "unknown/unknown", not a real platform.
-// --all-platforms makes nerdctl try to ensure (fetch, if missing) content
-// for every entry including those, and nerdctl's own fetch path for that
-// entry fails with "content digest ... not found" rather than skipping it.
-// An explicit --platform scopes both what nerdctl ensures locally and what
-// it writes into the archive to that one real platform, so the
-// attestation entries are never touched. kind's own node-side import (`ctr
+// in the image's manifest -- deliberately narrower than --all-platforms,
+// which tries to ensure (fetch, if missing) content for every platform the
+// image lists, including ones nothing upstream of this call ever pulled,
+// and fails with "content digest ... not found" on those.
+//
+// This narrows what nerdctl fetches, but does not fully solve multi-arch
+// images on its own: nerdctl save still writes the full original manifest
+// list into the archive even when told to save one platform, it just skips
+// writing the other platforms' content. kind's node-side import (`ctr
 // images import --all-platforms`, hardcoded in kind and not something this
-// package controls) then only has that one platform to resolve, which is
-// what "load a locally built image onto one Linux node" needs anyway.
+// package controls) walks every entry that list still describes regardless
+// of what content is actually present, and fails the same way on whichever
+// platform's data was never written. There is no flag on either side of
+// this call that resolves that: the real fix is at the call site -- pass a
+// single-platform image reference (e.g. a specific manifest digest, not a
+// multi-arch tag) so there is no manifest list for either tool to walk. See
+// nkectl-bootstrap-e2e.yml's CWE_IMAGE comment for the concrete case this
+// hit. This flag still narrows what gets fetched/written for any caller
+// that does pass a multi-arch reference, so it stays as defense in depth.
 func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provider, image string) (path string, cleanup func(), err error) {
 	f, err := os.CreateTemp("", "nkectl-bootstrap-image-*.tar")
 	if err != nil {
