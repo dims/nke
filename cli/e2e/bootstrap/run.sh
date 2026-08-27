@@ -70,6 +70,18 @@ export NKECTL_CWE_IMAGE
 # nke-site-deploy, which this suite does not depend on.
 export NKECTL_CWE_PROFILES_IMAGE="${NKECTL_CWE_PROFILES_IMAGE:-cwe-profiles:local}"
 
+# `kind create cluster` merges into $KUBECONFIG, defaulting to ~/.kube/config
+# if unset -- own scratch path instead, so this run never touches (or takes
+# ownership of) the caller's default kubeconfig. This matters most for the
+# nerdctl leg's CI job, which runs this whole script under `sudo -E`: without
+# this, `kind create cluster` running as root would leave ~/.kube/config
+# root-owned, and a later, unrelated cleanup step running as the normal user
+# (helm/kind-action's own post-job step) would fail with "permission denied"
+# trying to update it. Harmless for the docker leg too, so it is not
+# provider-conditional.
+KUBECONFIG_DIR="$(mktemp -d)"
+export KUBECONFIG="${KUBECONFIG_DIR}/config"
+
 log() { printf '[nkectl-bootstrap-e2e] %s\n' "$*"; }
 
 nodes_up=false
@@ -78,6 +90,7 @@ cleanup() {
     log "tearing down fake node containers"
     make -C "${CLI_DIR}" nodes-down || true
   fi
+  rm -rf "${KUBECONFIG_DIR}"
 }
 trap cleanup EXIT
 
