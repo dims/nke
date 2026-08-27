@@ -1,8 +1,9 @@
 # Getting started
 
 This guide walks you through setting up a local development environment
-for nke and verifying that the modules build and test cleanly. The repository
-holds nine Go modules; see the repository README for what each one is.
+for nke and verifying that the modules build and test cleanly. The repository is
+a Go workspace of several modules, listed in `go.work`. The repository README
+says what each one is.
 
 ## Prerequisites
 
