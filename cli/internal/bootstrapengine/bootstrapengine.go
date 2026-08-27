@@ -30,7 +30,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"runtime"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -275,31 +275,35 @@ func (e *Engine) Exists(ctx context.Context, clusterName string, provider Provid
 	return false, nil
 }
 
-// Kubeconfig returns the path to a kubeconfig file for clusterName, writing
-// it out via `kind get kubeconfig` if not already cached on disk. provider
+// Kubeconfig returns the path to a kubeconfig file for clusterName. provider
 // must match whatever provider created clusterName -- kind resolves a
 // cluster's nodes through its provider, so the wrong one reports the
 // cluster's nodes as missing even though it exists. An empty provider
 // defaults to ProviderNerdctl like the rest of this package.
+//
+// kind writes the file, rather than this function capturing its stdout: Run
+// merges stderr into stdout (see CommandRunner), and kind prints "using
+// nerdctl due to KIND_EXPERIMENTAL_PROVIDER" on stderr under every non-Docker
+// provider. Captured, that line became line 1 of the kubeconfig and clients
+// failed with "yaml: line 2: mapping values are not allowed in this context".
 func (e *Engine) Kubeconfig(ctx context.Context, clusterName string, provider Provider) (string, error) {
 	if provider == "" {
 		provider = ProviderNerdctl
 	}
-	out, err := e.Runner.Run(ctx, providerEnvMap(provider), "kind", "get", "kubeconfig", "--name", clusterName)
-	if err != nil {
-		return "", fmt.Errorf("kind get kubeconfig %s: %w\n%s", clusterName, err, out)
-	}
-
-	f, err := os.CreateTemp("", "nkectl-bootstrap-kubeconfig-"+clusterName+"-*.yaml")
+	// A new directory, not a temp file: `kind export kubeconfig` merges into
+	// whatever the path holds, and an empty file is not a kubeconfig.
+	dir, err := os.MkdirTemp("", "nkectl-bootstrap-kubeconfig-"+clusterName+"-*")
 	if err != nil {
 		return "", fmt.Errorf("creating kubeconfig file for %s: %w", clusterName, err)
 	}
-	defer func() { _ = f.Close() }()
+	path := filepath.Join(dir, "config")
 
-	if _, err := f.WriteString(out); err != nil {
-		return "", fmt.Errorf("writing kubeconfig file for %s: %w", clusterName, err)
+	out, err := e.Runner.Run(ctx, providerEnvMap(provider),
+		"kind", "export", "kubeconfig", "--name", clusterName, "--kubeconfig", path)
+	if err != nil {
+		return "", fmt.Errorf("kind export kubeconfig %s: %w\n%s", clusterName, err, out)
 	}
-	return f.Name(), nil
+	return path, nil
 }
 
 // LoadImage loads a locally built image into every node of clusterName.
@@ -354,28 +358,12 @@ func (e *Engine) LoadImage(ctx context.Context, clusterName string, provider Pro
 // (e.g. `nerdctl save`), the same way ensureImageAvailable in
 // cmd/nkectl/bootstrap.go already treats the provider name as the CLI
 // binary to run. The caller must call cleanup once done with the file.
-//
-// Saves a single, explicit platform (the host's) rather than every platform
-// in the image's manifest -- deliberately narrower than --all-platforms,
-// which tries to ensure (fetch, if missing) content for every platform the
-// image lists, including ones nothing upstream of this call ever pulled,
-// and fails with "content digest ... not found" on those.
-//
-// This narrows what nerdctl fetches, but does not fully solve multi-arch
-// images on its own: nerdctl save still writes the full original manifest
-// list into the archive even when told to save one platform, it just skips
-// writing the other platforms' content. kind's node-side import (`ctr
-// images import --all-platforms`, hardcoded in kind and not something this
-// package controls) walks every entry that list still describes regardless
-// of what content is actually present, and fails the same way on whichever
-// platform's data was never written. There is no flag on either side of
-// this call that resolves that: the real fix is at the call site -- pass a
-// single-platform image reference (e.g. a specific manifest digest, not a
-// multi-arch tag) so there is no manifest list for either tool to walk. See
-// nkectl-bootstrap-e2e.yml's CWE_IMAGE comment for the concrete case this
-// hit. This flag still narrows what gets fetched/written for any caller
-// that does pass a multi-arch reference, so it stays as defense in depth.
 func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provider, image string) (path string, cleanup func(), err error) {
+	cli := string(provider)
+	if err := flattenToHostPlatform(ctx, runner, cli, image); err != nil {
+		return "", nil, err
+	}
+
 	f, err := os.CreateTemp("", "nkectl-bootstrap-image-*.tar")
 	if err != nil {
 		return "", nil, fmt.Errorf("creating image archive for %s: %w", image, err)
@@ -384,13 +372,68 @@ func saveImageArchive(ctx context.Context, runner CommandRunner, provider Provid
 	_ = f.Close()
 	cleanup = func() { _ = os.Remove(archivePath) }
 
-	cli := string(provider)
-	platform := runtime.GOOS + "/" + runtime.GOARCH
-	if out, err := runner.Run(ctx, nil, cli, "save", "--platform", platform, "-o", archivePath, image); err != nil {
+	if out, err := runner.Run(ctx, nil, cli, "save", "-o", archivePath, image); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("%s save %s: %w\n%s", cli, image, err, out)
 	}
 	return archivePath, cleanup, nil
+}
+
+// flattenToHostPlatform points image at the single manifest for this host,
+// the way `docker pull` already stores one.
+//
+// nerdctl stores a multi-arch tag as the whole manifest index, and `nerdctl
+// save` writes that index out. `--platform` limits which blobs it writes, not
+// what the index lists. kind imports on the node with `ctr images import
+// --all-platforms`, so it reads every entry the index lists and fails on the
+// platform nobody pulled: "content digest sha256:...: not found".
+//
+// A digest reference is already one manifest, and `tag` cannot target one, so
+// it is left alone.
+func flattenToHostPlatform(ctx context.Context, runner CommandRunner, cli, image string) error {
+	repo, ok := repoOfTaggedRef(image)
+	if !ok {
+		return nil
+	}
+	out, err := runner.Run(ctx, nil, cli, "image", "inspect", "--mode=native",
+		"--format", "{{.Image.Target.Digest}} {{.ManifestDesc.Digest}}", image)
+	if err != nil {
+		return fmt.Errorf("%s image inspect %s: %w\n%s", cli, image, err, out)
+	}
+	// One line per store entry matching image, all the same pair.
+	line, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
+	target, manifest, ok := strings.Cut(line, " ")
+	if !ok || !strings.HasPrefix(manifest, "sha256:") {
+		return fmt.Errorf("%s image inspect %s: want two sha256 digests, got %q", cli, image, out)
+	}
+	// Equal means the tag already points at one manifest, so there is no
+	// index to flatten. A locally built or loaded image is always this, and
+	// has no digest name for `tag` to read anyway.
+	if target == manifest {
+		return nil
+	}
+
+	// Retag image itself, not a new name: the node must end up holding the
+	// reference the pod spec asks for.
+	if out, err := runner.Run(ctx, nil, cli, "tag", repo+"@"+manifest, image); err != nil {
+		return fmt.Errorf("%s tag %s@%s %s: %w\n%s", cli, repo, manifest, image, err, out)
+	}
+	return nil
+}
+
+// repoOfTaggedRef splits the repository off a "repo:tag" reference. It reports
+// false when the reference has no tag or pins a digest. A colon starts a tag
+// only after the last slash; before it, it is a registry port.
+func repoOfTaggedRef(image string) (repo string, ok bool) {
+	lastSlash := strings.LastIndex(image, "/")
+	if strings.Contains(image[lastSlash+1:], "@") {
+		return "", false
+	}
+	i := strings.LastIndex(image, ":")
+	if i <= lastSlash {
+		return "", false
+	}
+	return image[:i], true
 }
 
 // providerEnvMap returns the environment overrides Run should apply for the
