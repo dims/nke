@@ -100,6 +100,20 @@ log "PASS: all fake nodes are up and node-agent is reachable"
 log "building the profiles image (${NKECTL_CWE_PROFILES_IMAGE})"
 make -C "${CLI_DIR}" ensure-profiles-image CWE_PROFILES_IMAGE="${NKECTL_CWE_PROFILES_IMAGE}"
 
+# ensure-profiles-image always builds through `docker` (see cli/Makefile):
+# `nerdctl build` needs a running buildkitd, which this suite does not stand
+# up (a second daemon alongside the containerd-nerdctl.service the nerdctl
+# CI leg already installs -- see nkectl-bootstrap-e2e.yml). Under the
+# nerdctl provider, ensureImageAvailable in cmd/nkectl/bootstrap.go inspects
+# and loads NKECTL_CWE_PROFILES_IMAGE through nerdctl, and a purely local
+# image docker built is invisible to nerdctl's own, separate containerd
+# instance -- so bridge it across once here, the same way `docker save` /
+# `nerdctl load` move any other locally built image between two runtimes.
+if [ "${NKECTL_BOOTSTRAP_PROVIDER}" = "nerdctl" ]; then
+  log "loading ${NKECTL_CWE_PROFILES_IMAGE} into nerdctl's containerd (built via docker above)"
+  docker save "${NKECTL_CWE_PROFILES_IMAGE}" | nerdctl load
+fi
+
 log "running: nkectl bootstrap site -i ${INVENTORY}" \
   "(NKECTL_BOOTSTRAP_PROVIDER=${NKECTL_BOOTSTRAP_PROVIDER}, NKECTL_CWE_IMAGE=${NKECTL_CWE_IMAGE}," \
   "NKECTL_CWE_PROFILES_IMAGE=${NKECTL_CWE_PROFILES_IMAGE})"
