@@ -25,6 +25,9 @@ e2e_binary="${tmp_dir}/cwe-e2e.test"
 had_tilt_config=false
 tilt_config_staged=false
 management_ready=false
+# Unique per run so two checkouts on one host do not fight over the container.
+bundle_mirror_name="capd-e2e-bundle-mirror-${$}"
+bundle_mirror_volume="capd-e2e-bundle-${$}"
 
 log() {
   printf '[local-capd-e2e] %s\n' "$*"
@@ -68,6 +71,8 @@ collect_diagnostics() {
     docker rm -f "${runner_name}" >/dev/null 2>&1 || true
   fi
 
+  e2e_stop_bundle_mirror "${bundle_mirror_name}" "${bundle_mirror_volume}"
+
   if [[ "${tilt_config_staged}" == true ]]; then
     if [[ "${had_tilt_config}" == true ]]; then
       cp "${tilt_config_backup}" "${tilt_config}"
@@ -86,7 +91,7 @@ collect_diagnostics() {
 }
 trap collect_diagnostics EXIT
 
-for command in curl docker go jq kind kubectl make tilt; do
+for command in curl docker dpkg-deb go jq kind kubectl make tilt; do
   require_command "${command}"
 done
 
@@ -150,6 +155,28 @@ make -C "${repo_root}" kind-up
 kind get kubeconfig --name "${kind_cluster_name}" >"${host_kubeconfig}"
 export KUBECONFIG="${host_kubeconfig}"
 management_ready=true
+
+log "building the CAPD bundle from public sources"
+bundle_dir="${state_dir}/bundles"
+rm -rf "${bundle_dir}"
+bash "${repo_root}/hack/ci/prepare-capd-bundles.sh" "${bundle_dir}"
+
+e2e_stop_bundle_mirror "${bundle_mirror_name}" "${bundle_mirror_volume}"
+mirror_ip="$(e2e_start_bundle_mirror \
+  "${bundle_mirror_name}" "${bundle_mirror_volume}" "${bundle_dir}")" \
+  || fail "could not start the bundle mirror"
+export BUNDLE_SERVER_URL="http://${mirror_ip}/"
+export INDEX_FILE_URL="http://${mirror_ip}/index.json"
+export SPIRE_AGENT_BUNDLE_PATH="${bundle_dir}/spire-agent.tgz"
+CAPD_CNI_MANIFESTS_DEB_PATH="$(echo "${bundle_dir}"/nke-cni-calico-manifests-*_all.deb)"
+export CAPD_CNI_MANIFESTS_DEB_PATH
+[[ -f "${CAPD_CNI_MANIFESTS_DEB_PATH}" ]] \
+  || fail "prepare-capd-bundles.sh produced no Calico manifests package"
+# Prove it serves before building an image that bakes the URL in.
+docker run --rm --network kind alpine:3.22 \
+  wget -q -O /dev/null "${INDEX_FILE_URL}" \
+  || fail "bundle mirror is not serving ${INDEX_FILE_URL}"
+log "bundle mirror at ${BUNDLE_SERVER_URL}"
 
 log "building the local agent CAPD image and installing CAPI/CAPD"
 make -C "${repo_root}" capd-up

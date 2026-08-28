@@ -45,6 +45,33 @@ e2e_attestation_method() {
   fi
 }
 
+# The bundle the node agent installs Calico from. hack/ci/prepare-capd-bundles.sh
+# builds it from checksum-verified public sources, so no run needs the CloudFront
+# bundle server the node image defaults to, which the GitHub runners cannot
+# reach. Serving it from a volume rather than a host path keeps this working
+# where the Docker daemon does not share the host filesystem, as on Colima.
+e2e_start_bundle_mirror() {
+  local name="$1" volume="$2" dir="$3" loader="$1-loader" ip
+  docker volume create "${volume}" >/dev/null || return 1
+  docker create --name "${loader}" -v "${volume}:/bundle" alpine:3.22 true >/dev/null || return 1
+  docker cp "${dir}/." "${loader}:/bundle/" >/dev/null || return 1
+  docker rm "${loader}" >/dev/null || return 1
+  docker run -d --name "${name}" --network kind \
+    -v "${volume}:/usr/share/nginx/html:ro" nginx:alpine >/dev/null || return 1
+  # An address, not the container name: tenant nodes are plain containers on the
+  # kind network, where name resolution depends on the host resolver.
+  ip="$(docker inspect "${name}" \
+    --format '{{(index .NetworkSettings.Networks "kind").IPAddress}}' 2>/dev/null)"
+  [[ -n "${ip}" ]] || return 1
+  printf '%s' "${ip}"
+}
+
+e2e_stop_bundle_mirror() {
+  local name="$1" volume="$2"
+  docker rm -f "${name}" "${name}-loader" >/dev/null 2>&1 || true
+  docker volume rm "${volume}" >/dev/null 2>&1 || true
+}
+
 # tilt_config.json, written the same way for both entrypoints.
 e2e_write_tilt_config() {
   local out="$1" providers="$2" cwe_image="$3" vip="$4" bgp_container="$5"
