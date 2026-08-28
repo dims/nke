@@ -156,6 +156,17 @@ else
   docker info >/dev/null 2>&1 || fail "cannot reach the Docker daemon; is it running and is your user in the docker group?"
 fi
 
+# A failed run leaves its CAPD tenant nodes behind, and kube-vip keeps
+# advertising each dead control plane. The next run's VIP then load balances
+# across control planes from several clusters, and kubectl reports the API
+# server certificate as signed by an unknown authority. Diagnostics are already
+# in the state directory by then, so the containers themselves are safe to drop.
+stale_nodes="$(docker ps -aq --filter 'name=e2e-capd-' | wc -l | tr -d ' ')"
+if [[ "${stale_nodes}" != 0 ]]; then
+  log "removing ${stale_nodes} tenant node containers left by an earlier run"
+  docker ps -aq --filter 'name=e2e-capd-' | xargs -r docker rm -f >/dev/null 2>&1 || true
+fi
+
 log "ensuring the Kind management cluster exists"
 make -C "${repo_root}" kind-up
 kind get kubeconfig --name "${kind_cluster_name}" >"${host_kubeconfig}"
