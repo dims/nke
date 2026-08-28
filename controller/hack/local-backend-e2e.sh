@@ -101,6 +101,12 @@ case "$(uname -s)" in
   *) fail "unsupported host $(uname -s): this entrypoint supports macOS and Linux" ;;
 esac
 
+case "$(uname -m)" in
+  arm64 | aarch64) host_arch=arm64 ;;
+  x86_64) host_arch=amd64 ;;
+  *) fail "unsupported local architecture $(uname -m)" ;;
+esac
+
 # The Tiltfile refuses to render without these (no defaults). Check here too so
 # the failure is visible on the console instead of buried in tilt.log. Values
 # may come from the shell environment or .env.tilt.
@@ -159,7 +165,7 @@ management_ready=true
 log "building the CAPD bundle from public sources"
 bundle_dir="${state_dir}/bundles"
 rm -rf "${bundle_dir}"
-bash "${repo_root}/hack/ci/prepare-capd-bundles.sh" "${bundle_dir}"
+BUNDLE_ARCH="${host_arch}" bash "${repo_root}/hack/ci/prepare-capd-bundles.sh" "${bundle_dir}"
 
 e2e_stop_bundle_mirror "${bundle_mirror_name}" "${bundle_mirror_volume}"
 mirror_ip="$(e2e_start_bundle_mirror \
@@ -219,16 +225,10 @@ TILT_DISABLE_ANALYTICS=1 tilt ci \
   --output-snapshot-on-exit="${state_dir}/tilt-snapshot.json" \
   >"${state_dir}/tilt.log" 2>&1
 
-case "$(uname -m)" in
-  arm64 | aarch64) e2e_arch=arm64 ;;
-  x86_64) e2e_arch=amd64 ;;
-  *) fail "unsupported local architecture $(uname -m)" ;;
-esac
-
-log "compiling the E2E suite for linux/${e2e_arch}"
+log "compiling the E2E suite for linux/${host_arch}"
 (
   cd "${repo_root}/test/e2e"
-  GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH="${e2e_arch}" \
+  GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH="${host_arch}" \
     go test -c -o "${e2e_binary}" .
 )
 
