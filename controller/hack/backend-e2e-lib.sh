@@ -34,6 +34,17 @@ e2e_management_vip() {
   printf '%s' "${vip}"
 }
 
+# SPIRE node attestation. swtpm on the CAPD node needs /dev/vtpmx from whichever
+# kernel runs Docker: the Colima VM on macOS, where colima-start.sh guarantees
+# it, and the host kernel on Linux, where the GitHub runners lack the module.
+e2e_attestation_method() {
+  if [[ "$(uname -s)" == Darwin || -e /sys/class/misc/vtpmx ]]; then
+    printf 'tpm'
+  else
+    printf 'joinToken'
+  fi
+}
+
 # tilt_config.json, written the same way for both entrypoints.
 e2e_write_tilt_config() {
   local out="$1" providers="$2" cwe_image="$3" vip="$4" bgp_container="$5"

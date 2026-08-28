@@ -124,7 +124,8 @@ fi
 export NODE_AGENT_REPO_PATH
 export KIND_CLUSTER_NAME="${kind_cluster_name}"
 export CAPD_NODE_AGENT_LOCAL_BUILD="${CAPD_NODE_AGENT_LOCAL_BUILD:-true}"
-export CAPD_SPIRE_ATTESTATION_METHOD="${CAPD_SPIRE_ATTESTATION_METHOD:-tpm}"
+export CAPD_SPIRE_ATTESTATION_METHOD="${CAPD_SPIRE_ATTESTATION_METHOD:-$(e2e_attestation_method)}"
+log "SPIRE node attestation: ${CAPD_SPIRE_ATTESTATION_METHOD}"
 
 [[ -f "${NODE_AGENT_REPO_PATH}/Makefile" ]] || \
   fail "NODE_AGENT_REPO_PATH=${NODE_AGENT_REPO_PATH} does not look like an agent checkout"

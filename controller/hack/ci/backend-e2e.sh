@@ -610,12 +610,13 @@ if [[ "${e2e_built}" != true ]]; then
 fi
 
 log "building CAPD node image with agent source ${NODE_AGENT_VERSION}"
+log "SPIRE node attestation: $(e2e_attestation_method)"
 CAPD_NODE_AGENT_LOCAL_BUILD=true \
 NODE_AGENT_VERSION="${NODE_AGENT_VERSION}" \
 NODE_AGENT_REPO_PATH="${WORKSPACE_ROOT}/agent" \
 SPIRE_AGENT_BUNDLE_PATH="${BUNDLE_DIR}/spire-agent.tgz" \
 CAPD_CNI_MANIFESTS_DEB_PATH="${CALICO_MANIFESTS_DEB}" \
-CAPD_SPIRE_ATTESTATION_METHOD=joinToken \
+CAPD_SPIRE_ATTESTATION_METHOD="$(e2e_attestation_method)" \
 BUNDLE_SERVER_URL="http://${BUNDLE_MIRROR_NAME}/" \
 INDEX_FILE_URL="http://${BUNDLE_MIRROR_NAME}/index.json" \
 CAPD_KINDEST_NODE_IMAGE="${CAPD_NODE_IMAGE}" \
