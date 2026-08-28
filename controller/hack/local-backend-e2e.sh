@@ -5,6 +5,12 @@
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=controller/hack/backend-e2e-lib.sh
+source "${repo_root}/hack/backend-e2e-lib.sh"
+
+# `tilt ci` reads the Tiltfile from the working directory, so the script only
+# worked when run from here. Do not make the caller know that.
+cd "${repo_root}"
 state_dir="${LOCAL_NKE_E2E_STATE_DIR:-${repo_root}/.local/backend-e2e}"
 tmp_dir="$(mktemp -d)"
 kind_cluster_name="${KIND_CLUSTER_NAME:-cwe-capi}"
@@ -40,6 +46,8 @@ collect_diagnostics() {
   mkdir -p "${state_dir}"
   docker ps -a --no-trunc >"${state_dir}/docker-ps.txt" 2>&1
   docker system df >"${state_dir}/docker-system-df.txt" 2>&1
+  e2e_collect_node_diagnostics "${state_dir}/nodes" \
+    "${CAPD_NODE_IMAGE:-cwe-capd-kindest-node:local}"
   docker logs bgp-containers >"${state_dir}/bgp-containers.log" 2>&1
   docker exec bgp-containers vtysh -c 'show bgp summary' >"${state_dir}/bgp-containers-summary.txt" 2>&1
   docker exec bgp-containers vtysh -c 'show bgp ipv4 unicast' >"${state_dir}/bgp-containers-routes.txt" 2>&1
@@ -82,7 +90,11 @@ for command in curl docker go jq kind kubectl make tilt; do
   require_command "${command}"
 done
 
-[[ "$(uname -s)" == Darwin ]] || fail "this entrypoint currently supports macOS with Colima"
+case "$(uname -s)" in
+  Darwin) host_os=darwin ;;
+  Linux) host_os=linux ;;
+  *) fail "unsupported host $(uname -s): this entrypoint supports macOS and Linux" ;;
+esac
 
 # The Tiltfile refuses to render without these (no defaults). Check here too so
 # the failure is visible on the console instead of buried in tilt.log. Values
@@ -95,16 +107,21 @@ if [[ ! -f "${repo_root}/.env.tilt" ]]; then
   done
 fi
 
-: "${COLIMA_PROFILE:=default}"
-: "${COLIMA_CPUS:=10}"
-: "${COLIMA_MEMORY_GIB:=24}"
-: "${COLIMA_DISK_GIB:=150}"
-: "${COLIMA_DOCKER_HOST:=unix://${HOME}/.colima/${COLIMA_PROFILE}/docker.sock}"
-: "${DOCKER_HOST:=${COLIMA_DOCKER_HOST}}"
+# macOS reaches Docker through a Colima VM, which this script starts. Linux runs
+# Docker on the host, so there is no VM to size and DOCKER_HOST is whatever the
+# daemon already uses.
+if [[ "${host_os}" == darwin ]]; then
+  : "${COLIMA_PROFILE:=default}"
+  : "${COLIMA_CPUS:=10}"
+  : "${COLIMA_MEMORY_GIB:=24}"
+  : "${COLIMA_DISK_GIB:=150}"
+  : "${COLIMA_DOCKER_HOST:=unix://${HOME}/.colima/${COLIMA_PROFILE}/docker.sock}"
+  : "${DOCKER_HOST:=${COLIMA_DOCKER_HOST}}"
+  export COLIMA_PROFILE COLIMA_CPUS COLIMA_MEMORY_GIB COLIMA_DISK_GIB
+  export COLIMA_DOCKER_HOST DOCKER_HOST
+fi
 : "${NODE_AGENT_REPO_PATH:=${repo_root}/../agent}"
-
-export COLIMA_PROFILE COLIMA_CPUS COLIMA_MEMORY_GIB COLIMA_DISK_GIB
-export COLIMA_DOCKER_HOST DOCKER_HOST NODE_AGENT_REPO_PATH
+export NODE_AGENT_REPO_PATH
 export KIND_CLUSTER_NAME="${kind_cluster_name}"
 export CAPD_NODE_AGENT_LOCAL_BUILD="${CAPD_NODE_AGENT_LOCAL_BUILD:-true}"
 export CAPD_SPIRE_ATTESTATION_METHOD="${CAPD_SPIRE_ATTESTATION_METHOD:-tpm}"
@@ -119,8 +136,13 @@ if curl --fail --silent --show-error --connect-timeout 1 --max-time 1 \
   fail "another Tilt session is running on port 10350; stop it before running this script"
 fi
 
-log "starting Colima with ${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB memory, and ${COLIMA_DISK_GIB} GiB disk"
-make -C "${repo_root}" colima-up
+if [[ "${host_os}" == darwin ]]; then
+  log "starting Colima with ${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB memory, and ${COLIMA_DISK_GIB} GiB disk"
+  make -C "${repo_root}" colima-up
+else
+  log "using the host Docker daemon"
+  docker info >/dev/null 2>&1 || fail "cannot reach the Docker daemon; is it running and is your user in the docker group?"
+fi
 
 log "ensuring the Kind management cluster exists"
 make -C "${repo_root}" kind-up
@@ -131,14 +153,21 @@ management_ready=true
 log "building the local agent CAPD image and installing CAPI/CAPD"
 make -C "${repo_root}" capd-up
 
+# CAPD tenant nodes are sibling containers on the `kind` network, so they reach
+# the management cluster's SPIRE NodePort at its container IP. Without this the
+# Tiltfile falls back to the kind bridge gateway, where nothing is bound on
+# Linux, and every node's spire-agent gets connection refused. Same value the CI
+# entrypoint computes.
+management_vip="$(e2e_management_vip "${kind_cluster_name}")" ||
+  fail "could not read the Kind control-plane IP"
+
 if [[ -f "${tilt_config}" ]]; then
   cp "${tilt_config}" "${tilt_config_backup}"
   had_tilt_config=true
-  jq '. + {providers: ["capi_core", "bgp-containers", "capd"]}' \
-    "${tilt_config_backup}" >"${tilt_config}"
-else
-  jq -n '{providers: ["capi_core", "bgp-containers", "capd"]}' >"${tilt_config}"
 fi
+e2e_write_tilt_config "${tilt_config}" \
+  "${E2E_CAPD_PROVIDERS}" \
+  "${LOCAL_CWE_IMAGE:-}" "${management_vip}" "${BGP_CONTAINER_NAME:-bgp-containers}"
 tilt_config_staged=true
 
 # Sequential two-mode CAPD run (mirrors controller/hack/ci/backend-e2e.sh): a
@@ -196,25 +225,19 @@ docker cp "${e2e_config}" "${runner_name}:/state/e2e-config.json"
 
 # Run one Ginkgo leg against the already-deployed CWE. suffix keeps each leg's
 # log and JUnit report distinct (empty for a single-mode run).
-run_local_leg() {
-  local label_filter="$1" cp_flag="$2" suffix="$3"
-  log "running E2E specs matching ${label_filter} (PROVISION_CONTROL_PLANE_WITH_CONTROL_PLANE_CONTROLLER=${cp_flag:-<unset>})"
-  set +e
+# Exec adapter for the shared leg runner: locally the suite runs in a container
+# on the Kind network, reached with `docker exec`.
+local_e2e_exec() {
+  local cp_flag="$1"; shift
   docker exec \
     -e "PROVISION_CONTROL_PLANE_WITH_CONTROL_PLANE_CONTROLLER=${cp_flag}" \
-    "${runner_name}" \
-    /state/cwe-e2e.test \
-      -test.v \
-      -test.timeout=105m \
-      -e2e.config=/state/e2e-config.json \
-      -ginkgo.v \
-      -ginkgo.no-color \
-      -ginkgo.timeout=100m \
-      "-ginkgo.label-filter=${label_filter}" \
-      "-ginkgo.junit-report=/state/junit${suffix}.xml" \
-    2>&1 | tee "${state_dir}/e2e${suffix}.log"
-  local rc=${PIPESTATUS[0]}
-  set -e
+    "${runner_name}" "$@"
+}
+
+run_local_leg() {
+  local label_filter="$1" cp_flag="$2" suffix="$3" rc=0
+  e2e_run_ginkgo_leg local_e2e_exec log "${state_dir}" \
+    "${label_filter}" "${cp_flag}" "${suffix}" || rc=$?
   docker cp "${runner_name}:/state/junit${suffix}.xml" "${state_dir}/junit${suffix}.xml" >/dev/null 2>&1 || true
   return "${rc}"
 }
@@ -223,19 +246,11 @@ run_local_leg() {
 # removed every tenant cluster before the node-pool leg starts. Count CAPI
 # Cluster objects directly (not the CWE API, which enforces auth); zero of them
 # is a faithful, auth-free "cluster is clean" signal.
+local_kubectl() { kubectl "$@"; }
+
 wait_for_zero_tenant_clusters() {
-  local deadline=$((SECONDS + 300)) list count
-  while true; do
-    if list="$(kubectl get clusters.cluster.x-k8s.io -A --no-headers 2>/dev/null)"; then
-      count="$(printf '%s' "${list}" | grep -c . || true)"
-      if [[ "${count}" == "0" ]]; then
-        log "cleanup gate: no tenant clusters remain"
-        return 0
-      fi
-    fi
-    ((SECONDS < deadline)) || fail "cleanup gate: ${count:-unknown} tenant cluster(s) still present after 5m"
-    sleep 10
-  done
+  e2e_wait_for_zero_tenant_clusters local_kubectl log ||
+    fail "cleanup gate: tenant clusters still present"
 }
 
 # Flip the deployment-wide control-plane-controller flag with a light redeploy
@@ -254,12 +269,12 @@ redeploy_cwe() {
 
 if [[ "${sequential_modes}" == "true" ]]; then
   log "sequential CAPD control-plane modes: cp-controller (flag-on) then node-pool (flag-off)"
-  run_local_leg "(capd && cp-controller) || health" "true" "-cp-controller" || \
+  run_local_leg "${E2E_CAPD_CP_CONTROLLER_FILTER}" "true" "-cp-controller" || \
     fail "cp-controller leg failed with exit code $?; not running the node-pool leg"
   log "cp-controller leg passed; confirming the cluster is clean before the node-pool leg"
   wait_for_zero_tenant_clusters
   redeploy_cwe false
-  run_local_leg "(capd || health) && !cp-controller" "false" "-nodepool" || \
+  run_local_leg "${E2E_CAPD_NODE_POOL_FILTER}" "false" "-nodepool" || \
     fail "node-pool leg failed with exit code $?"
   log "sequential CAPD control-plane E2E passed (cp-controller then node-pool)"
 else
