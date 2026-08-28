@@ -40,10 +40,10 @@ jobs:
   local-entrypoint:
     name: local-backend-e2e.sh on Linux
     if: github.repository == 'NVIDIA/nke'
-    runs-on: linux-amd64-cpu16
+    runs-on: linux-amd64-gpu-l4-latest-1
     permissions:
       contents: read
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       # These runners reach Docker Hub through an NVIDIA mirror. backend-e2e.yml
       # sets the same value; helm needs the shim below to honour it for OCI
