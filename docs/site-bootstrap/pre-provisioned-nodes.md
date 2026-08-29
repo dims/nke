@@ -69,16 +69,22 @@ sudo apt-mark hold kubelet kubeadm kubectl
 
 ### Install Node-Agent
 
-`nke-agent` installs from the NKE apt repository. The commands below are for Ubuntu 24.04 (Noble); on 26.04 (Resolute) use the `nke-apt-resolute` prefix and `nke-resolute` suite.
+`nke-agent` installs from the NKE apt repository. The commands below are for Ubuntu 24.04 (Noble).
 
-> **TODO:** Confirm public apt repo URL and GPG key location before publishing.
+> **26.04 (Resolute) has no `nke-agent` package yet.** The `nke-apt-resolute`
+> prefix and `nke-resolute` suite are not published, so there is nothing to
+> install from. Use 24.04 until they exist.
+
+> The repository below answers NVIDIA networks only. There is no anonymously
+> reachable NKE apt repository yet, so these steps cannot be followed from
+> outside.
 
 ```bash
 # Configure the NKE apt repository
 sudo curl -fsSL -o /etc/apt/keyrings/nke.asc \
-  https://packages.nvidia.com/nke/nke-apt-public.key
+  https://nke-prod-assets.s3.us-west-2.amazonaws.com/nke-apt-public.key
 
-echo 'deb [signed-by=/etc/apt/keyrings/nke.asc] https://packages.nvidia.com/nke/apt nke-noble main' | \
+echo 'deb [signed-by=/etc/apt/keyrings/nke.asc] https://nke-prod-assets.s3.us-west-2.amazonaws.com/nke-apt-noble nke-noble main' | \
   sudo tee /etc/apt/sources.list.d/nke-apt.list
 
 sudo apt-get update

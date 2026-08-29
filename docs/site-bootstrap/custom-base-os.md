@@ -81,10 +81,10 @@ autoinstall:
       - [sh, -c, "apt-get install -y kubelet kubeadm kubectl"]
       - [sh, -c, "apt-mark hold kubelet kubeadm kubectl"]
 
-      # TODO: Replace apt repo URL with confirmed public URL before publishing.
-      # Install nke-agent from the NKE apt repository
-      - [sh, -c, "curl -fsSL -o /etc/apt/keyrings/nke.asc https://packages.nvidia.com/nke/nke-apt-public.key"]
-      - [sh, -c, "echo 'deb [signed-by=/etc/apt/keyrings/nke.asc] https://packages.nvidia.com/nke/apt nke-noble main' | tee /etc/apt/sources.list.d/nke-apt.list"]
+      # Install nke-agent from the NKE apt repository. It answers NVIDIA
+      # networks only; there is no anonymously reachable one yet.
+      - [sh, -c, "curl -fsSL -o /etc/apt/keyrings/nke.asc https://nke-prod-assets.s3.us-west-2.amazonaws.com/nke-apt-public.key"]
+      - [sh, -c, "echo 'deb [signed-by=/etc/apt/keyrings/nke.asc] https://nke-prod-assets.s3.us-west-2.amazonaws.com/nke-apt-noble nke-noble main' | tee /etc/apt/sources.list.d/nke-apt.list"]
       - [sh, -c, "apt-get update"]
       - [sh, -c, "apt-get install -y nke-agent"]
       - [sh, -c, "echo 'AGENT_ARGS=\"--disable-mtls --secure-server-port 15005\"' > /etc/default/nke-agent"]
