@@ -179,7 +179,10 @@ RUN set -eux; \
     fi; \
     NKE_AGENT_BUNDLE_ARGS=""; \
     if [ -n "${BUNDLE_SERVER_URL}" ]; then \
-      NKE_AGENT_BUNDLE_ARGS=" --bundle-server-url ${BUNDLE_SERVER_URL} --index-file-url ${INDEX_FILE_URL}"; \
+      NKE_AGENT_BUNDLE_ARGS=" --bundle-server-url ${BUNDLE_SERVER_URL}"; \
+    fi; \
+    if [ -n "${INDEX_FILE_URL}" ]; then \
+      NKE_AGENT_BUNDLE_ARGS="${NKE_AGENT_BUNDLE_ARGS} --index-file-url ${INDEX_FILE_URL}"; \
     fi; \
     printf '%s\n' \
       "AGENT_ARGS=\"--disable-mlx5-rescan${NKE_AGENT_SPIFFE_ARG} --secure-server-port ${NODE_AGENT_PORT}${NKE_AGENT_BUNDLE_ARGS}\"" \
