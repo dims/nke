@@ -63,8 +63,6 @@ jobs:
             for (const pr of open) {
               // State is recomputed from the head rather than tracked, so a
               // re-run that goes green clears the label on its own sweep.
-              // `filter: latest` is the default and returns one run per check
-              // name, so a superseded failure does not keep the label alive.
               const runs = await github.paginate(github.rest.checks.listForRef, {
                 ...context.repo,
                 ref: pr.head.sha,
@@ -72,10 +70,25 @@ jobs:
                 per_page: 100,
               });
 
+              // `filter: latest` keeps one run per name WITHIN a check suite,
+              // not across suites, and a re-run builds a new suite. So a head
+              // whose `gate` failed and then passed returns both, and taking
+              // the failure would pin the label on a green pull request. Keep
+              // the newest run per name. Do not reach for the GraphQL
+              // statusCheckRollup instead: its `state` is computed over the
+              // contexts page you ask for, so `first: 100` of 138 runs reports
+              // the superseded suite and contradicts `gh pr checks`.
+              const newest = new Map();
+              const bySha = [...runs].sort((a, b) =>
+                (a.started_at ?? '').localeCompare(b.started_at ?? '') || a.id - b.id);
+              for (const r of bySha) {
+                newest.set(r.name, r);
+              }
+
               // `cancelled` is not a failure here: cancel-in-progress
               // concurrency cancels runs constantly, and labelling on that is
               // noise. A run still in progress is not a failure either.
-              const failed = runs
+              const failed = [...newest.values()]
                 .filter((r) => r.status === 'completed' && ['failure', 'timed_out'].includes(r.conclusion))
                 .map((r) => r.name);
 
