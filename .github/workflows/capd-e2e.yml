@@ -19,6 +19,7 @@ on:
     branches:
       - main
       - "pull-request/[0-9]+"
+      - "worktree-capd-e2e-arm64" # SCRATCH: drop before the real PR
     paths:
       - "controller/**"
       - "agent/**"
@@ -50,10 +51,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: [arm64] # SCRATCH: amd64 leg dropped, restore before the real PR
         include:
-          - arch: amd64
-            runner: linux-amd64-cpu16
           - arch: arm64
             runner: linux-arm64-cpu16
     uses: ./.github/workflows/backend-e2e.yml

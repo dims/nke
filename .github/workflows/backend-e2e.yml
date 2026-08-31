@@ -102,7 +102,8 @@ jobs:
   e2e:
     name: ${{ inputs.backend }}-e2e (${{ inputs.arch }})
     runs-on: ${{ inputs.runner }}
-    if: github.repository == 'NVIDIA/nke'
+    # SCRATCH: drop before the real PR.
+    # if: github.repository == 'NVIDIA/nke'
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: read
