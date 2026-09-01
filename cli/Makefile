@@ -109,11 +109,18 @@ build-cross: ## Build nkectl for every NKECTL_PLATFORMS entry into DIST.
 	@# done for a foreign GOOS, so the host-matching output is executed instead:
 	@# every platform shares one NKECTL_LDFLAGS, so if one is stamped they all
 	@# are. Skipped when no built platform matches the host.
+	@#
+	@# 2>&1 and the exit check are load-bearing: without them a binary that dies
+	@# on start prints nothing to stdout, matches no case arm, and this reports
+	@# "verified" and exits 0. The "" arm covers an exit-0 binary that printed
+	@# nothing. Same reasoning as check() in the root Makefile's version-check.
 	@host="$$($(GO) env GOOS)-$$($(GO) env GOARCH)"; \
 	if [ -x "$(DIST)/nkectl-$$host" ]; then \
-	  out="$$($(DIST)/nkectl-$$host version)"; \
+	  if ! out="$$($(DIST)/nkectl-$$host version 2>&1)"; then \
+	    echo "ERROR: nkectl-$$host version exited non-zero: $$out"; exit 1; \
+	  fi; \
 	  case "$$out" in \
-	    *" dev "*|*"unknown"*|*"v0.0.0"*) \
+	    *" dev "*|*"unknown"*|*"v0.0.0"*|"") \
 	      echo "ERROR: cross build produced an unstamped binary: $$out"; exit 1;; \
 	    *) echo "  verified $$host: $$out";; \
 	  esac; \
