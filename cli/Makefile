@@ -48,12 +48,22 @@ include ../make/golangci.mk
 #
 # nkectl versions apart from the controller, so it gets its own tag family. Go
 # requires a submodule's tags to carry its directory, so this module is tagged
-# cli/vX.Y.Z. The prefix is stripped, so the binary reports v1.2.3. No cli/v*
-# tag exists yet, hence the fallbacks: a plain v* tag, the commit, then v0.0.0.
-# The commit says which source a build came from, leaving v0.0.0 to mean a build
-# outside a git checkout. --dirty marks a modified tree.
-_NKECTL_VERSION_RAW := $(shell git describe --tags --dirty --match 'cli/v[0-9]*' 2>/dev/null || git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null || git describe --always --dirty 2>/dev/null || echo "v0.0.0")
-NKECTL_VERSION  ?= $(patsubst cli/%,%,$(_NKECTL_VERSION_RAW))
+# cli/vX.Y.Z. The prefix is stripped, so the binary reports v1.2.3. The fallbacks
+# are a plain v* tag, then the commit, then v0.0.0. The commit says which source
+# a build came from, leaving v0.0.0 to mean a build outside a git checkout.
+# --dirty marks a modified tree.
+#
+# --always needs --match too: it only degrades to a bare commit when no tag
+# describes HEAD, and here one always does, so unmatched it returned
+# controller/v0.1.1-rc.2-<n>-g<sha>. ${v##*/} then strips whichever prefix came
+# back, not just cli/. Both mirror cmd_version in the root Makefile.
+_NKECTL_VERSION := $(shell \
+    v=$$(git describe --tags --dirty --match 'cli/v[0-9]*' 2>/dev/null \
+      || git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null \
+      || git describe --always --dirty --match 'cli/v[0-9]*' 2>/dev/null \
+      || echo v0.0.0); \
+    printf '%s' "$${v##*/}")
+NKECTL_VERSION  ?= $(_NKECTL_VERSION)
 NKECTL_COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 NKECTL_TREE     ?= $(shell test -z "$$(git status --porcelain 2>/dev/null)" && echo clean || echo dirty)
 # The commit timestamp, not the wall clock: building the same commit twice
