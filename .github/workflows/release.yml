@@ -157,6 +157,35 @@ jobs:
             echo "count=0" >> "${GITHUB_OUTPUT}"
           fi
 
+      # build-cross stamps the version from `git describe`, this job takes it
+      # from the tag, and nothing tied the two together. The runner is
+      # linux/amd64, so the shipped binary can be asked directly.
+      - name: Check nkectl reports the tag version
+        if: steps.component.outputs.dir == 'cli'
+        shell: bash
+        env:
+          VERSION: ${{ steps.component.outputs.version }}
+        run: |
+          set -euo pipefail
+          BIN="${GITHUB_WORKSPACE}/dist/nkectl-linux-amd64"
+
+          # 2>&1 and the exit check, so a binary that dies on start fails here
+          # rather than printing nothing and matching whatever comes last.
+          if ! out="$("${BIN}" version 2>&1)"; then
+            echo "::error::${BIN} version exited non-zero: ${out}"
+            exit 1
+          fi
+
+          # The trailing space is load-bearing: it stops a v0.1.0 tag accepting
+          # a v0.1.0-rc.1 binary, or a describe with commits after the tag.
+          case "${out}" in
+            "nkectl ${VERSION} "*) echo "nkectl reports ${VERSION}: ${out}" ;;
+            *)
+              echo "::error::This release is tagged ${VERSION}, and the binary reports: ${out}"
+              exit 1
+              ;;
+          esac
+
       # Scans what is about to be published, after checksums are computed and
       # before anything leaves the runner. Scanning earlier would miss
       # checksums.txt; scanning after the upload would mean withdrawing a
