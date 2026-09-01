@@ -127,6 +127,21 @@ build-cross: ## Build nkectl for every NKECTL_PLATFORMS entry into DIST.
 	else \
 	  echo "  no host-matching platform in NKECTL_PLATFORMS; version assertion skipped"; \
 	fi
+	@# The check above runs one binary of four. A build that emitted the wrong
+	@# target is invisible to it, and a release ships all four. `go version -m`
+	@# reads the settings the toolchain recorded, so every output can be checked
+	@# from any host without executing it and without `file`.
+	@for p in $(NKECTL_PLATFORMS); do \
+	  os=$${p%/*}; arch=$${p#*/}; f="$(DIST)/nkectl-$$os-$$arch"; \
+	  if ! info="$$($(GO) version -m "$$f" 2>&1)"; then \
+	    echo "ERROR: cannot read build info from $$f: $$info"; exit 1; \
+	  fi; \
+	  got="$$(printf '%s\n' "$$info" | awk -F'GOOS=' '/GOOS=/{print $$2; exit}')/$$(printf '%s\n' "$$info" | awk -F'GOARCH=' '/GOARCH=/{print $$2; exit}')"; \
+	  if [ "$$got" != "$$os/$$arch" ]; then \
+	    echo "ERROR: $$f reports $$got, expected $$os/$$arch"; exit 1; \
+	  fi; \
+	  echo "  target ok $$os/$$arch"; \
+	done
 
 # -buildvcs=false because nkectl's version comes from the -X symbols in
 # NKECTL_LDFLAGS, asserted just below. See the note on work-check-offline in the
