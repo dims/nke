@@ -90,9 +90,11 @@ autoinstall:
       - [sh, -c, "echo 'AGENT_ARGS=\"--disable-mtls --secure-server-port 15005\"' > /etc/default/nke-agent"]
       - [sh, -c, "systemctl restart nke-agent"]
 
-      # TODO: Replace with real release URL once the repo is public.
+      # TODO: This curl works only once the repo is public. cloud-init has no
+      # GitHub credentials, so on the internal repo, stage the binary yourself.
+      # Bump the cli/v* tag to the release you want.
       # Download and install nkectl (init node only)
-      - [sh, -c, "curl -fsSL -o /usr/local/bin/nkectl https://github.com/NVIDIA/nke/releases/latest/download/nkectl-linux-amd64 && chmod +x /usr/local/bin/nkectl"]
+      - [sh, -c, "curl -fsSL -o /usr/local/bin/nkectl https://github.com/NVIDIA/nke/releases/download/cli/v0.1.0-rc.2/nkectl-linux-amd64 && chmod +x /usr/local/bin/nkectl"]
 
       # Run bootstrap (init node only)
       - [sh, -c, "REGISTRY_API_KEY=<your-registry-api-key> nkectl bootstrap site -i /etc/nkectl/inventory.yaml >> /var/log/nkectl-bootstrap.log 2>&1"]

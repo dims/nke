@@ -6,31 +6,31 @@ Releases are published under `cli/v*` tags at https://github.com/NVIDIA/nke/rele
 
 ## Download
 
-```bash
-# linux/amd64
-curl -fsSL -o nkectl \
-  https://github.com/NVIDIA/nke/releases/latest/download/nkectl-linux-amd64
-chmod +x nkectl
-sudo mv nkectl /usr/local/bin/
-```
+The repository is internal, so download the asset with `gh`, which sends your
+credentials. A plain `curl` of the asset URL returns 404 until the repository
+is public.
 
 ```bash
-# linux/arm64
-curl -fsSL -o nkectl \
-  https://github.com/NVIDIA/nke/releases/latest/download/nkectl-linux-arm64
-chmod +x nkectl
-sudo mv nkectl /usr/local/bin/
+NKECTL_RELEASE=cli/v0.1.0-rc.2
+NKECTL_PLATFORM=linux-amd64   # or linux-arm64, darwin-amd64, darwin-arm64
+
+gh release download "$NKECTL_RELEASE" --repo NVIDIA/nke \
+  --pattern "nkectl-$NKECTL_PLATFORM" --pattern checksums.txt --clobber
 ```
+
+Verify the download against `checksums.txt` from the same release:
 
 ```bash
-# macOS (Apple Silicon)
-curl -fsSL -o nkectl \
-  https://github.com/NVIDIA/nke/releases/latest/download/nkectl-darwin-arm64
-chmod +x nkectl
-sudo mv nkectl /usr/local/bin/
+sha256sum --ignore-missing -c checksums.txt
+# macOS: shasum -a 256 --ignore-missing -c checksums.txt
 ```
 
-Verify the download with `checksums.txt` from the same release.
+Install it:
+
+```bash
+chmod +x "nkectl-$NKECTL_PLATFORM"
+sudo mv "nkectl-$NKECTL_PLATFORM" /usr/local/bin/nkectl
+```
 
 ## Verify
 
