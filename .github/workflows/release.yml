@@ -104,10 +104,14 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "Releasing ${TAG}: module='${DIR:-<repository>}' version=${VERSION}"
 
+      # go.work, not cli/go.mod, like every other workflow here. setup-go pins
+      # GOTOOLCHAIN=local, so the toolchain must satisfy the workspace, which
+      # asks for the highest of its members. go.work went to 1.26.6 while
+      # cli/go.mod stayed on 1.26.5, and build-cross failed on every cli/v* tag.
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: cli/go.mod
+          go-version-file: go.work
 
       # What each component ships differs, so it is declared rather than guessed.
       # A component with no artifacts still gets a release: the tag and its notes
