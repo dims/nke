@@ -488,6 +488,22 @@ func NicoVMSNodePoolRequest(clusterID uuid.UUID, spec NodePoolSpec) (api.CreateN
 	return nodePoolRequest(clusterID, pool), nil
 }
 
+// NicoNodePoolRequest is NicoVMSNodePoolRequest for the container-backed NICo
+// topology. buildNicoNodePool names the machine template after the cluster and
+// reads the VPC from the spec, so both are arguments here where the VMS builder
+// needs neither.
+func NicoNodePoolRequest(clusterID uuid.UUID, clusterName, vpcID string, spec NodePoolSpec) (api.CreateNodePoolRequest, error) {
+	vpc, err := uuid.Parse(vpcID)
+	if err != nil {
+		return api.CreateNodePoolRequest{}, fmt.Errorf("parsing VPC ID %q: %w", vpcID, err)
+	}
+	pool, err := buildNicoNodePool(clusterName, vpc, spec)
+	if err != nil {
+		return api.CreateNodePoolRequest{}, err
+	}
+	return nodePoolRequest(clusterID, pool), nil
+}
+
 func nodePoolRequest(clusterID uuid.UUID, pool api.NodePoolCreateConfig) api.CreateNodePoolRequest {
 	//exhaustruct:enforce
 	return api.CreateNodePoolRequest{

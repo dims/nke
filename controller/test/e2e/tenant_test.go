@@ -245,8 +245,46 @@ var _ = DescribeTableSubtree("NKE with backend", withNicoVMSOSProfileEntries(
 			controlPlanePools: []nke.NodePoolSpec{{DesiredNodeCount: 3}},
 			workerPools:       []nke.NodePoolSpec{{DesiredNodeCount: 1}},
 		},
+		options: nke.Options{Provision: 15 * time.Minute, Delete: 10 * time.Minute, Poll: 5 * time.Second},
+		// Everything CAPD asserts on this shape, plus the node-pool operations
+		// nico-vms carries. None of these reaches the infrastructure API: they
+		// call CWE's REST surface or the tenant cluster, and both backends use
+		// the same node image.
+		validate: validations{
+			scale: true, reboot: true,
+			postReadyChecks: true, csrApproval: true,
+			nodePoolLifecycle: true, nodePoolCascade: true,
+			nodeReplacement: true, manualScaleDown: true, clusterConfig: true,
+		},
+	}),
+	// Encryption and OIDC need their own clusters: a cluster born encrypted
+	// cannot also exercise enabling encryption on an unencrypted one, and
+	// brownfield OIDC needs a cluster created with OIDC off. Same split CAPD
+	// uses, and until now CAPD was the only backend asserting any of it.
+	Entry("nico-containers with etcd encryption", Ordered, ContinueOnFailure, Label("nico-containers", "extended", "encryption"), testSpec{
+		buildSpec: nicoSpec,
+		shape: clusterShape{
+			controlPlanePools: []nke.NodePoolSpec{{DesiredNodeCount: 3}},
+			etcdEncrypted:     true,
+		},
 		options:  nke.Options{Provision: 15 * time.Minute, Delete: 10 * time.Minute, Poll: 5 * time.Second},
-		validate: validations{scale: true, reboot: true},
+		validate: validations{etcdEncryption: true},
+	}),
+	Entry("nico-containers brownfield etcd encryption", Ordered, ContinueOnFailure, Label("nico-containers", "extended", "encryption", "etcd-encryption-enable"), testSpec{
+		buildSpec: nicoSpec,
+		shape: clusterShape{
+			controlPlanePools: []nke.NodePoolSpec{{DesiredNodeCount: 3}},
+		},
+		options:  nke.Options{Provision: 15 * time.Minute, Delete: 10 * time.Minute, Poll: 5 * time.Second},
+		validate: validations{brownfieldEtcdEncryption: true},
+	}),
+	Entry("nico-containers brownfield OIDC enablement", Ordered, ContinueOnFailure, Label("nico-containers", "extended", "oidc", "oidc-enable"), testSpec{
+		buildSpec: nicoSpec,
+		shape: clusterShape{
+			controlPlanePools: []nke.NodePoolSpec{{DesiredNodeCount: 3}},
+		},
+		options:  nke.Options{Provision: 15 * time.Minute, Delete: 10 * time.Minute, Poll: 5 * time.Second},
+		validate: validations{brownfieldOIDC: true},
 	}),
 	Entry("nico-vms", Ordered, ContinueOnFailure, Label("nico-vms", "happy-path"), testSpec{
 		buildSpec: nicoVMSSpec,
@@ -638,6 +676,11 @@ const (
 	nicoSubnetID       = "00000000-0000-0000-0000-000000000003"
 	nicoSSHKeyGroupID  = "00000000-0000-0000-0000-000000000004"
 	nicoInstanceTypeID = "00000000-0000-0000-0000-000000000005"
+
+	// Advertised by the bgp-containers provider this lane already deploys, as
+	// capdControlPlaneVIP is for CAPD. postReadyChecks points a kubelet at it,
+	// so it has to route, not merely be reported.
+	nicoControlPlaneVIP = "172.31.2.1"
 )
 
 // nicoSpec builds a CAPNico topology backed by the local mock's Docker
@@ -652,8 +695,9 @@ func nicoSpec(_ config.Config, name string, shape clusterShape) nke.ClusterSpec 
 		SiteID:            nicoSiteID,
 		VpcID:             nicoVpcID,
 		ControlPlane: nke.ControlPlane{
-			Pools:         nicoNodePoolSpecs(shape.controlPlanePools, "control-plane", "cp"),
-			EtcdEncrypted: shape.etcdEncrypted,
+			Pools:           nicoNodePoolSpecs(shape.controlPlanePools, "control-plane", "cp"),
+			EtcdEncrypted:   shape.etcdEncrypted,
+			ControlPlaneVIP: defaultString(shape.controlPlaneVIP, nicoControlPlaneVIP),
 		},
 		Workers: nicoNodePoolSpecs(shape.workerPools, "worker", "w"),
 	}
