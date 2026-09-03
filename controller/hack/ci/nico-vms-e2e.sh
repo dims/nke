@@ -134,6 +134,10 @@ start_state_monitor() {
         jq -c '.[]? | {id, name, status, ips: [(.interfaces // [])[] | .ipAddresses[]?]}' 2>/dev/null || printf '(nico-vms list failed)\n'
       printf '=== %s domains ===\n' "${captured_at}"
       virsh -c "${LIBVIRT_URI}" list --all 2>/dev/null | tail -n +3 | sed '/^$/d' || printf '(virsh failed)\n'
+      # A deleted VM takes its console and journal with it; a green run deletes
+      # them all. Copy the consoles and keep a journal stream per VM instead.
+      save_console_logs
+      stream_guest_journals
       sleep 30
     done
   ) >"${STATE_DIR}/state-timeline.log" 2>&1 &
@@ -152,7 +156,7 @@ start_state_monitor() {
 }
 
 stop_state_monitor() {
-  local pid
+  local pid pidfile
   for pid in "${STATE_MONITOR_PID}" "${PROGRESS_MONITOR_PID}"; do
     [[ -n "${pid}" ]] || continue
     kill "${pid}" >/dev/null 2>&1 || true
@@ -160,6 +164,68 @@ stop_state_monitor() {
   done
   STATE_MONITOR_PID=""
   PROGRESS_MONITOR_PID=""
+  for pidfile in "${STATE_DIR}"/.journal-pids/*; do
+    [[ -f "${pidfile}" ]] || continue
+    pid="$(cat "${pidfile}")"
+    pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
+    kill -TERM "${pid}" >/dev/null 2>&1 || true
+  done
+  rm -rf "${STATE_DIR}/.journal-pids"
+}
+
+# One `journalctl -f` over SSH per VM that has an address, restarted when the
+# pre-join reboot drops it. Records the agent's bundle fetches and containerd's
+# image pulls for VMs the suite deletes before the run ends.
+stream_guest_journals() {
+  local user="${NICO_VMS_DIAG_SSH_USER:-nico-diag}" password="${NICO_VMS_DIAG_SSH_PASSWORD:-nico-diag}"
+  local line id name ip pidfile
+  command -v sshpass >/dev/null 2>&1 || return 0
+  mkdir -p "${STATE_DIR}/guests" "${STATE_DIR}/.journal-pids"
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    read -r id name ip <<<"${line}"
+    pidfile="${STATE_DIR}/.journal-pids/${id}"
+    if [[ -f "${pidfile}" ]] && kill -0 "$(cat "${pidfile}")" 2>/dev/null; then
+      continue
+    fi
+    SSHPASS="${password}" sshpass -e ssh -n \
+      -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+      -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
+      -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+      "${user}@${ip}" 'sudo journalctl -f -n all -o short-iso -u nke-agent -u containerd -u kubelet' \
+      >>"${STATE_DIR}/guests/${name}-${ip}.journal.log" 2>/dev/null &
+    echo $! >"${pidfile}"
+  done < <(curl -fsS --max-time 5 -H "Authorization: Bearer ${NICO_VMS_TOKEN}" \
+    "http://localhost:18080/v2/org/${NICO_VMS_ORG_ID}/forge/instance" 2>/dev/null |
+    jq -r '.[]? | select(((.interfaces // [])[0].ipAddresses // []) | length > 0) | "\(.id) \(.name) \(.interfaces[0].ipAddresses[0])"' 2>/dev/null)
+}
+
+# What the VMs fetched, from the three records that outlive them: dnsmasq's
+# query log (every name resolved), the serial consoles (cloud-init prints each
+# apt fetch) and the streamed journals (agent bundles, image pulls).
+summarize_downloads() {
+  local out="${STATE_DIR}/downloads.txt" dns="${STATE_DIR}/nico-vms/nico-vms-dnsmasq.log"
+  local ubuntu='archive\.ubuntu\.com|security\.ubuntu\.com'
+  {
+    echo "# names the VMs resolved (count, name)"
+    [[ -f "${dns}" ]] && grep -aoE 'query\[[A-Z]+\] [^ ]+' "${dns}" | awk '{print $2}' | sort | uniq -c | sort -rn
+    echo
+    echo "# apt fetches on the serial consoles, Ubuntu mirrors excluded (boots, line)"
+    cat "${STATE_DIR}"/console/*.log 2>/dev/null | grep -aoE 'Get:[0-9]+ https?://[^ ]+ .*\[[^]]+\]' |
+      sed -E 's/^Get:[0-9]+ //' | grep -vE "${ubuntu}" | sort | uniq -c | sort -rn
+    echo
+    echo "# apt fetches from the Ubuntu mirrors: $(cat "${STATE_DIR}"/console/*.log 2>/dev/null | grep -acE "Get:[0-9]+ https?://[^ ]*(${ubuntu})" || true) lines"
+    echo
+    echo "# apt totals per boot (boots, line)"
+    cat "${STATE_DIR}"/console/*.log 2>/dev/null | grep -aoE 'Fetched [0-9.,]+ [kMG]?B in [^(]+\([^)]+\)' | sort | uniq -c | sort -rn
+    echo
+    echo "# nke-agent journal: bundle, download and fetch lines (count, line)"
+    cat "${STATE_DIR}"/guests/*.journal.log 2>/dev/null | grep -a 'nke-agent\[' | grep -aiE 'bundle|download|fetch' |
+      sed -E 's/^.*nke-agent\[[0-9]+\]: //; s/"time":"[^"]*",?//' | sort | uniq -c | sort -rn | head -n 60
+    echo
+    echo "# containerd journal: image pulls (count, image)"
+    cat "${STATE_DIR}"/guests/*.journal.log 2>/dev/null | grep -aoE 'PullImage \\?"[^"\\]+' | sed -E 's/PullImage \\?"//' | sort | uniq -c | sort -rn
+  } >"${out}" 2>/dev/null || true
 }
 
 # Guest-side facts over SSH, through the diag user nico-vms injects into every
@@ -246,6 +312,7 @@ collect_diagnostics() {
     "http://localhost:18080/v2/org/${NICO_VMS_ORG_ID}/forge/instance"
   guest_diagnostics
   save_console_logs
+  summarize_downloads
   capture virsh-list.txt virsh -c "${LIBVIRT_URI}" list --all
   capture host-routes.txt ip -4 route show
 
@@ -344,6 +411,8 @@ export CWE_PROFILES_DIR="${CWE_PROFILES_DIR:-${CONTROLLER_ROOT}/test/fixtures/pr
 # Inherited by Tilt's serve_cmd. -1 skips the console SSH listener; :2222 taken is fatal.
 export NICO_VMS_CONSOLE_SSH_PORT="${NICO_VMS_CONSOLE_SSH_PORT:--1}"
 export NICO_VMS_LIBVIRT_URI="${LIBVIRT_URI}"
+# Every name the VMs resolve, into nico-vms-dnsmasq.log; see summarize_downloads.
+export NICO_VMS_DNSMASQ_LOG_QUERIES=true
 export TILT_DISABLE_ANALYTICS=1
 # Read by the Tiltfile. The agent then installs the CNI from the charts deb
 # rather than fetching a bundle, as local-entrypoint-e2e already does.
