@@ -202,8 +202,16 @@ var _ = DescribeTableSubtree("NKE with backend", withNicoVMSOSProfileEntries(
 			workerPools:       []nke.NodePoolSpec{{DesiredNodeCount: 1}},
 			controlPlaneVIP:   capdControlPlaneVIP,
 		},
-		options:  nke.Options{Provision: 10 * time.Minute, Delete: 5 * time.Minute, Poll: 5 * time.Second},
-		validate: validations{scale: true, reboot: true, postReadyChecks: true, csrApproval: true, nodePoolLifecycle: true},
+		options: nke.Options{Provision: 10 * time.Minute, Delete: 5 * time.Minute, Poll: 5 * time.Second},
+		// The last four were nico-vms-only until nico-containers took them, which
+		// left CAPD the one backend in CI not asserting them. They call CWE's
+		// node-pool API and read cluster fields; nothing here is backend-specific.
+		validate: validations{
+			scale: true, reboot: true, postReadyChecks: true,
+			csrApproval: true, nodePoolLifecycle: true,
+			nodePoolCascade: true, nodeReplacement: true,
+			manualScaleDown: true, clusterConfig: true,
+		},
 	}),
 	// Opt-in via the "cp-controller" label: it exercises cluster-level
 	// control-plane-controller provisioning (no control-plane node pool), so it
@@ -219,6 +227,18 @@ var _ = DescribeTableSubtree("NKE with backend", withNicoVMSOSProfileEntries(
 			controlPlaneVIP:    capdControlPlaneVIP,
 		},
 		options:  nke.Options{Provision: 10 * time.Minute, Delete: 5 * time.Minute, Poll: 5 * time.Second},
+		validate: validations{controlPlaneController: true, controlPlaneControllerUpdate: true, controlPlaneControllerRollingUpdate: true},
+	}),
+	// The same for nico-containers, so the cp-controller path is not CAPD-only.
+	// Three control-plane nodes because the rolling-update spec needs a
+	// multi-node control plane to keep etcd quorum while it rolls.
+	Entry("nico-containers control-plane controller (no CP node pool)", Ordered, ContinueOnFailure, Label("nico-containers", "cp-controller"), testSpec{
+		buildSpec: nicoControlPlaneControllerSpec,
+		shape: clusterShape{
+			controlPlaneConfig: &nke.ControlPlaneConfigSpec{DesiredCount: 3},
+			workerPools:        []nke.NodePoolSpec{{DesiredNodeCount: 1}},
+		},
+		options:  nke.Options{Provision: 15 * time.Minute, Delete: 10 * time.Minute, Poll: 5 * time.Second},
 		validate: validations{controlPlaneController: true, controlPlaneControllerUpdate: true, controlPlaneControllerRollingUpdate: true},
 	}),
 	Entry("nico-vms control-plane controller (no CP node pool)", Ordered, ContinueOnFailure, Label("nico-vms", "cp-controller"), testSpec{
@@ -630,6 +650,27 @@ func nicoVMSControlPlaneControllerSpec(cfg config.Config, name string, shape clu
 	spec := nicoVMSSpec(cfg, name, shape)
 	spec.ControlPlane.Pools = nil
 	spec.ControlPlane.Config = shape.controlPlaneConfig
+	return spec
+}
+
+// nicoControlPlaneControllerSpec is the same for the container-backed NICo
+// topology. Requires CWE deployed with
+// PROVISION_CONTROL_PLANE_WITH_CONTROL_PLANE_CONTROLLER=true.
+func nicoControlPlaneControllerSpec(cfg config.Config, name string, shape clusterShape) nke.ClusterSpec {
+	spec := nicoSpec(cfg, name, shape)
+	spec.ControlPlane.Pools = nil
+	spec.ControlPlane.Config = shape.controlPlaneConfig
+	if spec.ControlPlane.Config != nil {
+		// The mock's seeded identifiers, the same ones nicoNodePoolSpecs applies
+		// to a pool. Without them the machine template has no instance type or
+		// subnet and CWE rejects the create.
+		cp := *spec.ControlPlane.Config
+		cp.InstanceTypeID = defaultString(cp.InstanceTypeID, nicoInstanceTypeID)
+		cp.SubnetIDs = defaultStrings(cp.SubnetIDs, nicoSubnetID)
+		cp.SSHKeyGroupIDs = defaultStrings(cp.SSHKeyGroupIDs, nicoSSHKeyGroupID)
+		cp.SystemReservedMemory = defaultString(cp.SystemReservedMemory, "1Gi")
+		spec.ControlPlane.Config = &cp
+	}
 	return spec
 }
 

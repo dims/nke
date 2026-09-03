@@ -76,6 +76,7 @@ type ControlPlaneConfigSpec struct {
 	OSProfile            string
 	ConfigProfile        string
 	VpcPrefixIDs         []string
+	SubnetIDs            []string
 	SSHKeyGroupIDs       []string
 	SystemReservedMemory string
 }
@@ -183,7 +184,45 @@ func buildNicoRequest(spec ClusterSpec) (api.CreateClusterRequest, error) {
 		*req.NodePools = append(*req.NodePools, pool)
 	}
 
+	if spec.ControlPlane.Config != nil {
+		cfg, err := buildNicoControlPlaneConfig(req.Name, vpcID, spec)
+		if err != nil {
+			return api.CreateClusterRequest{}, fmt.Errorf("building control plane config: %w", err)
+		}
+		req.ControlPlaneConfig = cfg
+	}
+
 	return req, nil
+}
+
+// buildNicoControlPlaneConfig builds the cluster-level control-plane config for
+// control-plane-controller provisioning, where the control plane has no owning
+// node pool. A NICo control-plane node is shaped exactly like a NICo pool node,
+// so this borrows buildNicoNodePool's machine template rather than repeating it.
+func buildNicoControlPlaneConfig(clusterName string, vpcID uuid.UUID, spec ClusterSpec) (*api.CreateClusterControlPlaneConfig, error) {
+	cp := spec.ControlPlane.Config
+	pool, err := buildNicoNodePool(clusterName, vpcID, NodePoolSpec{
+		Name:                 nodeRoleControlPlane,
+		NodeNamePrefix:       "cp",
+		ControlPlane:         true,
+		DesiredNodeCount:     cp.DesiredCount,
+		SystemReservedMemory: cp.SystemReservedMemory,
+		InstanceTypeID:       cp.InstanceTypeID,
+		SubnetIDs:            cp.SubnetIDs,
+		SSHKeyGroupIDs:       cp.SSHKeyGroupIDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	//exhaustruct:ignore
+	return &api.CreateClusterControlPlaneConfig{
+		DesiredCount:               cp.DesiredCount,
+		MaxSurge:                   cp.MaxSurge,
+		SystemReservedMemory:       pool.SystemReservedMemory,
+		CapiSpireAttestationMethod: pool.CapiSpireAttestationMethod,
+		CapiPreKubeadmCommands:     pool.CapiPreKubeadmCommands,
+		CapiInfraMachineTemplate:   pool.CapiInfraMachineTemplate,
+	}, nil
 }
 
 func buildNicoNodePool(clusterName string, vpcID uuid.UUID, spec NodePoolSpec) (api.NodePoolCreateConfig, error) {
