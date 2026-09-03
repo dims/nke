@@ -75,11 +75,19 @@ fi
 
 echo "Starting dnsmasq on ${BRIDGE} (${CIDR}), upstream DNS: ${UPSTREAM_DNS_ARGS[*]}"
 
+# NICO_VMS_DNSMASQ_LOG_QUERIES=true logs every name the VMs resolve: the only
+# record of where they fetch from that survives the VMs. Chatty; off by default.
+LOG_ARGS=()
+if [[ "${NICO_VMS_DNSMASQ_LOG_QUERIES:-}" == "true" ]]; then
+    LOG_ARGS+=(--log-queries)
+fi
+
 # --keep-in-foreground keeps normal TCP worker forking while Tilt owns the foreground process.
 # --log-facility=- sends runtime logs to stderr so Tilt can capture them.
 exec sudo dnsmasq \
     --keep-in-foreground \
     --log-facility=- \
+    "${LOG_ARGS[@]+"${LOG_ARGS[@]}"}" \
     --listen-address="$GATEWAY" \
     --bind-interfaces \
     --dhcp-range="interface:${BRIDGE},${RANGE_START},${RANGE_END},255.255.255.0,30m" \
