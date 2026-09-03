@@ -78,7 +78,7 @@ redact_diagnostics() {
   while IFS= read -r -d '' file; do
     files+=("${file}")
     sed -E -i.bak \
-      -e 's/[a-z0-9]{6}\.[a-z0-9]{16}/REDACTED-KUBEADM-TOKEN/g' \
+      -e 's/(^|[^a-z0-9.-])[a-z0-9]{6}\.[a-z0-9]{16}([^a-z0-9.-]|$)/\1REDACTED-KUBEADM-TOKEN\2/g' \
       -e 's/(--certificate-key[=[:space:]]+)[0-9a-fA-F]{64}/\1REDACTED/g' \
       -e 's/(discovery-token-ca-cert-hash[=[:space:]]+sha256:)[0-9a-fA-F]{64}/\1REDACTED/g' \
       -e 's/((apiEncryptionKey|api_encryption_key|certificateKey|certificate_key|client-key-data)[" ]*[:=][" ]*)[^",[:space:]]+/\1REDACTED/g' \
@@ -88,14 +88,20 @@ redact_diagnostics() {
     rm -f "${file}.bak"
   done < <(find "${STATE_DIR}" -type f -print0)
   ((${#files[@]} > 0)) || return 0
-  if grep -EIl \
-    -e '[a-z0-9]{6}\.[a-z0-9]{16}' \
+  # Same shapes as the sed above. A file that still matches names itself in
+  # the log; the token check must agree with the substitution or every run
+  # with a hostname like pkg-containers.githubusercontent.com fails here.
+  local leftover
+  leftover="$(grep -EIl \
+    -e '(^|[^a-z0-9.-])[a-z0-9]{6}\.[a-z0-9]{16}([^a-z0-9.-]|$)' \
     -e 'certificate-key[=[:space:]]+[0-9a-fA-F]{64}' \
     -e 'discovery-token-ca-cert-hash[=[:space:]]+sha256:[0-9a-fA-F]{64}' \
     -e '(apiEncryptionKey|api_encryption_key|certificateKey|certificate_key|client-key-data)[" ]*[:=][" ]*[A-Za-z0-9+/=]{20,}' \
     -e '(spireJoinToken|spire_join_token|joinToken|join_token)[" ]*[:=][" ]*[^",[:space:]]{12,}' \
     -e '-joinToken[=[:space:]]+[^[:space:]]{12,}' \
-    -- "${files[@]}" >/dev/null; then
+    -- "${files[@]}" 2>/dev/null || true)"
+  if [[ -n "${leftover}" ]]; then
+    log "redaction left matches in: $(tr '\n' ' ' <<<"${leftover}")"
     return 1
   fi
   return 0
@@ -138,6 +144,9 @@ start_state_monitor() {
       # them all. Copy the consoles and keep a journal stream per VM instead.
       save_console_logs
       stream_guest_journals
+      # kubelet rotates a container log at 10 MiB; a chatty hour of CWE is
+      # gone by the time collect_diagnostics asks. Stream it instead.
+      stream_cwe_log
       sleep 30
     done
   ) >"${STATE_DIR}/state-timeline.log" 2>&1 &
@@ -171,6 +180,20 @@ stop_state_monitor() {
     kill -TERM "${pid}" >/dev/null 2>&1 || true
   done
   rm -rf "${STATE_DIR}/.journal-pids"
+}
+
+# `kubectl logs -f` of the CWE deployment, restarted if it drops. cwe.log at
+# exit is only what kubelet has not rotated away yet; this is the whole run.
+stream_cwe_log() {
+  local pidfile="${STATE_DIR}/.journal-pids/cwe"
+  mkdir -p "${STATE_DIR}/.journal-pids"
+  if [[ -f "${pidfile}" ]] && kill -0 "$(cat "${pidfile}")" 2>/dev/null; then
+    return 0
+  fi
+  kubectl -n cloud-workflow-engine get deployment/cloud-workflow-engine >/dev/null 2>&1 || return 0
+  kubectl -n cloud-workflow-engine logs -f deployment/cloud-workflow-engine --all-containers --tail=-1 \
+    >>"${STATE_DIR}/cwe.stream.log" 2>/dev/null &
+  echo $! >"${pidfile}"
 }
 
 # One `journalctl -f` over SSH per VM that has an address, restarted when the
