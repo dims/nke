@@ -5,9 +5,10 @@
 # tenant nodes booted from the NKE FDE image. Body: controller/hack/ci/nico-vms-e2e.sh,
 # host mode, because nico-vms needs libvirt, the host bridge and CAP_NET_ADMIN.
 # Advisory. A run takes about 2.5 hours on the one KVM runner, so the push
-# paths are only the lane's own inputs; everything else it depends on is covered
-# by the twice-daily schedule. Mirror-branch pushes are the PR trigger;
-# self-hosted runners get no pull_request events.
+# paths are only the lane's own inputs, and a mirror-branch run is skipped
+# unless the pull request itself touches them; everything else the lane depends
+# on is covered by the twice-daily schedule. Mirror-branch pushes are the PR
+# trigger; self-hosted runners get no pull_request events.
 
 name: NICo VMs E2E
 
@@ -21,8 +22,10 @@ on:
       - "controller/hack/nico-vm-provider/**"
       - "controller/hack/ci/nico-vms-e2e.sh"
       - "controller/test/kubeadm/scripts/**"
-      # Without this, a change to the lane's own definition does not run it.
+      # Without these, a change to the lane's own definition or its gate does
+      # not run it.
       - .github/workflows/nico-vms-e2e.yml
+      - .github/workflows/e2e-pr-path-filter.yml
   # Twice a day, like the other E2E lanes, half an hour after the kubeadm
   # bring-up lane's slot so the two do not queue on the same runner. A schedule
   # ignores the paths above, so these runs catch changes to the suite, the
@@ -46,11 +49,24 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # A mirror-branch push carries base-branch commits too, so the paths above
+  # fire for every pull request updated after a nico-vms change lands on main.
+  # Re-read the pull request's own file list first (#474 did this for the NICo
+  # lane); main, the schedule and dispatch pass through untouched.
+  changes:
+    uses: ./.github/workflows/e2e-pr-path-filter.yml
+    permissions:
+      pull-requests: read
+    with:
+      # Keep in step with the push paths above.
+      relevant_paths: '^controller/(nico-vms/|hack/nico-vm-provider/|hack/ci/nico-vms-e2e\.sh$|test/kubeadm/scripts/)|^\.github/workflows/(nico-vms-e2e|e2e-pr-path-filter)\.yml$'
+
   nico-vms-e2e:
     name: nico-vms-e2e (amd64, KVM)
     # The one label with /dev/kvm; see kubeadm-bringup-e2e.yml for why.
     runs-on: linux-amd64-gpu-l4-latest-1
-    if: github.repository == 'NVIDIA/nke'
+    needs: changes
+    if: github.repository == 'NVIDIA/nke' && needs.changes.outputs.run_e2e == 'true'
     # Unmeasured. Two tenant clusters of three to six VMs, one of them upgraded
     # through two Kubernetes versions. Generous until there is data.
     timeout-minutes: 330
