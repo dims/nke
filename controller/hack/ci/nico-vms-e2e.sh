@@ -450,7 +450,7 @@ export INSTALL_CNI_AFTER_INIT="${INSTALL_CNI_AFTER_INIT:-true}"
 # otherwise, so a mirror failure costs time, not the run.
 NKE_APT_REPO="${NKE_APT_REPO:-https://nke-prod-assets.s3.us-west-2.amazonaws.com/nke-apt-noble}"
 mirror_apt_packages() {
-  local dir="${NICO_VMS_FILES_DIR}/apt" stage index names name version best file sha started
+  local dir="${NICO_VMS_FILES_DIR}/apt" stage index names name version best file sha local_name started
   started="$(date +%s)"
   stage="$(mktemp -d "${STATE_DIR}/apt-mirror.XXXXXX")"
   index="${stage}/Packages.upstream"
@@ -486,11 +486,15 @@ mirror_apt_packages() {
       continue
     fi
     IFS=$'\t' read -r version file sha <<<"${best}"
-    echo "apt mirror: ${name} ${version} <- ${file}"
-    ( curl -fsS --retry 3 --max-time 1500 "${NKE_APT_REPO}/${file}" -o "${stage}/$(basename "${file}")" &&
-      echo "${sha}  ${stage}/$(basename "${file}")" | sha256sum -c --quiet - ) &
+    # No '+' in the served file name: apt percent-encodes it once when it builds
+    # the URI and, after a targeted `apt-get update`, once more, so nico-vms was
+    # asked for spire-agent_1.14.1%252btpm1.9.0 and answered 404 (run 33864940616).
+    local_name="$(basename "${file}" | tr '+~:' '___')"
+    echo "apt mirror: ${name} ${version} <- ${file} as ${local_name}"
+    ( curl -fsS --retry 3 --max-time 1500 "${NKE_APT_REPO}/${file}" -o "${stage}/${local_name}" &&
+      echo "${sha}  ${stage}/${local_name}" | sha256sum -c --quiet - ) &
     # The index stanza, with Filename pointing into this flat directory.
-    awk -v RS='' -v name="${name}" -v version="${version}" -v base="$(basename "${file}")" '
+    awk -v RS='' -v name="${name}" -v version="${version}" -v base="${local_name}" '
       { ok=0; n=split($0, l, "\n")
         for (i=1; i<=n; i++) if (l[i] == "Package: " name) ok=1
         if (!ok) next
