@@ -463,8 +463,10 @@ mirror_apt_packages() {
   for version in $(grep -ohE '"1\.[0-9]+\.[0-9]+"' test/e2e/tenant_test.go test/e2e/upgrade_test.go | tr -d '"' | sort -u); do
     names="${names} nke-kubeadm-distro-${version}"
   done
-  names="${names} $(grep -oE 'nke-cni-(ovn|calico)-images-[0-9.]+' "${CWE_PROFILES_DIR}/osProfiles/nke-nico-vms-24.04-amd64-fde/userData.tmpl" | sort -u | tr '\n' ' ')"
-  : >"${stage}/Packages"
+  names="${names} $(grep -oE 'nke-cni-(ovn|calico)-(images|charts|manifests)-[0-9.]+' "${CWE_PROFILES_DIR}/osProfiles/nke-nico-vms-24.04-amd64-fde/userData.tmpl" | sort -u | tr '\n' ' ')"
+  # Phase 1: resolve each name's newest revision and start its download.
+  # --retry-all-errors: the allowlisted bucket returns the odd 403, which plain --retry ignores.
+  local -a dl_pid dl_name dl_ver dl_local
   for name in ${names}; do
     best=""
     while IFS=$'\t' read -r version file sha; do
@@ -491,19 +493,34 @@ mirror_apt_packages() {
     # asked for spire-agent_1.14.1%252btpm1.9.0 and answered 404 (run 33864940616).
     local_name="$(basename "${file}" | tr '+~:' '___')"
     echo "apt mirror: ${name} ${version} <- ${file} as ${local_name}"
-    ( curl -fsS --retry 3 --max-time 1500 "${NKE_APT_REPO}/${file}" -o "${stage}/${local_name}" &&
+    ( curl -fsS --retry 5 --retry-all-errors --retry-delay 3 --max-time 1500 \
+        "${NKE_APT_REPO}/${file}" -o "${stage}/${local_name}" &&
       echo "${sha}  ${stage}/${local_name}" | sha256sum -c --quiet - ) &
-    # The index stanza, with Filename pointing into this flat directory.
-    awk -v RS='' -v name="${name}" -v version="${version}" -v base="${local_name}" '
-      { ok=0; n=split($0, l, "\n")
-        for (i=1; i<=n; i++) if (l[i] == "Package: " name) ok=1
-        if (!ok) next
-        hit=0; for (i=1; i<=n; i++) if (l[i] == "Version: " version) hit=1
-        if (!hit) next
-        for (i=1; i<=n; i++) { if (l[i] ~ /^Filename: /) l[i] = "Filename: ./" base; print l[i] }
-        print "" }' "${index}" >>"${stage}/Packages"
+    dl_pid+=("$!"); dl_name+=("${name}"); dl_ver+=("${version}"); dl_local+=("${local_name}")
   done
-  wait || { echo "apt mirror: a download or checksum failed; no index published, the VMs use S3"; return 1; }
+
+  # Phase 2: wait on each download by PID -- a bare `wait` returns 0 even when a
+  # background job failed, which is how the broken index shipped -- and write the
+  # index stanza only for the ones that arrived. A package whose download failed
+  # is left out, so apt falls back to the S3 source for it alone.
+  : >"${stage}/Packages"
+  local ok=0 i
+  for i in "${!dl_pid[@]}"; do
+    if wait "${dl_pid[$i]}"; then
+      awk -v RS='' -v name="${dl_name[$i]}" -v version="${dl_ver[$i]}" -v base="${dl_local[$i]}" '
+        { hit=0; n=split($0, l, "\n")
+          for (i=1; i<=n; i++) if (l[i] == "Package: " name) hit++
+          for (i=1; i<=n; i++) if (l[i] == "Version: " version) hit++
+          if (hit < 2) next
+          for (i=1; i<=n; i++) { if (l[i] ~ /^Filename: /) l[i] = "Filename: ./" base; print l[i] }
+          print "" }' "${index}" >>"${stage}/Packages"
+      ok=$((ok + 1))
+    else
+      echo "apt mirror: ${dl_name[$i]} ${dl_ver[$i]} did not download or verify; the VMs fetch it from S3"
+      rm -f "${stage}/${dl_local[$i]}"
+    fi
+  done
+  (( ok > 0 )) || { echo "apt mirror: nothing mirrored; the VMs use S3"; return 1; }
   rm -f "${index}"
   rm -rf "${dir}"
   mkdir -p "$(dirname "${dir}")"
