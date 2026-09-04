@@ -493,8 +493,11 @@ mirror_apt_packages() {
     # asked for spire-agent_1.14.1%252btpm1.9.0 and answered 404 (run 33864940616).
     local_name="$(basename "${file}" | tr '+~:' '___')"
     echo "apt mirror: ${name} ${version} <- ${file} as ${local_name}"
+    # Percent-encode '+' in the request path. The bucket's WAF 403s a literal
+    # '+' (only spire-agent has one, and only it 403'd, six times, in run
+    # 33904194197); S3 resolves %2B to the same object.
     ( curl -fsS --retry 5 --retry-all-errors --retry-delay 3 --max-time 1500 \
-        "${NKE_APT_REPO}/${file}" -o "${stage}/${local_name}" &&
+        "${NKE_APT_REPO}/${file//+/%2B}" -o "${stage}/${local_name}" &&
       echo "${sha}  ${stage}/${local_name}" | sha256sum -c --quiet - ) &
     dl_pid+=("$!"); dl_name+=("${name}"); dl_ver+=("${version}"); dl_local+=("${local_name}")
   done
