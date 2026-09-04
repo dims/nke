@@ -441,6 +441,72 @@ export TILT_DISABLE_ANALYTICS=1
 # rather than fetching a bundle, as local-entrypoint-e2e already does.
 export INSTALL_CNI_AFTER_INIT="${INSTALL_CNI_AFTER_INIT:-true}"
 
+# ── NKE apt mirror for the VMs ──────────────────────────────────────────────
+# Every boot apt-installs about 2 GB from the S3 repository the image points at,
+# one slow stream per node, and the lane boots 16 nodes. Fetch what this run's
+# specs will install once, verify it against the repository's own index, and
+# serve it as a flat apt repository from nico-vms' file server. The OS profile
+# prefers /files/apt when its Packages index answers and falls back to S3
+# otherwise, so a mirror failure costs time, not the run.
+NKE_APT_REPO="${NKE_APT_REPO:-https://nke-prod-assets.s3.us-west-2.amazonaws.com/nke-apt-noble}"
+mirror_apt_packages() {
+  local dir="${NICO_VMS_FILES_DIR}/apt" stage index names name version best file sha started
+  started="$(date +%s)"
+  stage="$(mktemp -d "${STATE_DIR}/apt-mirror.XXXXXX")"
+  index="${stage}/Packages.upstream"
+  curl -fsS --retry 3 --max-time 120 "${NKE_APT_REPO}/dists/nke-noble/main/binary-amd64/Packages" -o "${index}" ||
+    { echo "cannot read ${NKE_APT_REPO}: no mirror, the VMs use S3"; return 1; }
+  # Package names, not versions: apt installs the newest revision of a name, and
+  # so does this. The Kubernetes versions come from the e2e source, the CNI
+  # images package from the template.
+  names="nke-agent spire-agent"
+  for version in $(grep -ohE '"1\.[0-9]+\.[0-9]+"' test/e2e/tenant_test.go test/e2e/upgrade_test.go | tr -d '"' | sort -u); do
+    names="${names} nke-kubeadm-distro-${version}"
+  done
+  names="${names} $(grep -oE 'nke-cni-(ovn|calico)-images-[0-9.]+' "${CWE_PROFILES_DIR}/osProfiles/nke-nico-vms-24.04-amd64-fde/userData.tmpl" | sort -u | tr '\n' ' ')"
+  : >"${stage}/Packages"
+  for name in ${names}; do
+    best=""
+    while IFS=$'\t' read -r version file sha; do
+      if [[ -z "${best}" ]] || dpkg --compare-versions "${version}" gt "${best%%$'\t'*}"; then
+        best="${version}"$'\t'"${file}"$'\t'"${sha}"
+      fi
+    done < <(awk -v RS='' -v name="${name}" '
+      { v=""; f=""; s=""; ok=0
+        n=split($0, l, "\n")
+        for (i=1; i<=n; i++) {
+          if (l[i] == "Package: " name) ok=1
+          if (l[i] ~ /^Version: /) v=substr(l[i], 10)
+          if (l[i] ~ /^Filename: /) f=substr(l[i], 11)
+          if (l[i] ~ /^SHA256: /) s=substr(l[i], 9)
+        }
+        if (ok) printf "%s\t%s\t%s\n", v, f, s }' "${index}")
+    if [[ -z "${best}" ]]; then
+      echo "apt mirror: ${name} is not in the repository index; the VMs fetch it from S3 if they ask"
+      continue
+    fi
+    IFS=$'\t' read -r version file sha <<<"${best}"
+    echo "apt mirror: ${name} ${version} <- ${file}"
+    ( curl -fsS --retry 3 --max-time 1500 "${NKE_APT_REPO}/${file}" -o "${stage}/$(basename "${file}")" &&
+      echo "${sha}  ${stage}/$(basename "${file}")" | sha256sum -c --quiet - ) &
+    # The index stanza, with Filename pointing into this flat directory.
+    awk -v RS='' -v name="${name}" -v version="${version}" -v base="$(basename "${file}")" '
+      { ok=0; n=split($0, l, "\n")
+        for (i=1; i<=n; i++) if (l[i] == "Package: " name) ok=1
+        if (!ok) next
+        hit=0; for (i=1; i<=n; i++) if (l[i] == "Version: " version) hit=1
+        if (!hit) next
+        for (i=1; i<=n; i++) { if (l[i] ~ /^Filename: /) l[i] = "Filename: ./" base; print l[i] }
+        print "" }' "${index}" >>"${stage}/Packages"
+  done
+  wait || { echo "apt mirror: a download or checksum failed; no index published, the VMs use S3"; return 1; }
+  rm -f "${index}"
+  rm -rf "${dir}"
+  mkdir -p "$(dirname "${dir}")"
+  mv "${stage}" "${dir}"
+  echo "apt mirror: $(grep -c '^Package: ' "${dir}/Packages") packages, $(du -sm "${dir}" | cut -f1) MB, $(( $(date +%s) - started )) s, served at http://carbide-pxe.forge:18080/files/apt/"
+}
+
 # ── The agent the tenant nodes run ──────────────────────────────────────────
 # The OS profile's userData apt-installs nke-agent from the bundle server, then
 # replaces it with http://carbide-pxe.forge:18080/files/node-agent/nke-agent
@@ -456,6 +522,12 @@ make -C "${WORKSPACE_ROOT}/agent" build-amd64 >"${STATE_DIR}/agent-build.log" 2>
   { tail -n 50 "${STATE_DIR}/agent-build.log" >&2; fail "building nke-agent failed"; }
 install -D -m 0755 "${WORKSPACE_ROOT}/agent/bin/linux_amd64/nke-agent" "${NICO_VMS_FILES_DIR}/${AGENT_URL_PATH#files/}"
 log "staged nke-agent for the tenant nodes: $(git -C "${WORKSPACE_ROOT}" describe --match 'agent/v*' --tags --always 2>/dev/null || echo unknown)"
+
+# In the background: kind, the image builds and Tilt take ten minutes the
+# network would otherwise sit idle for. Waited on before the first spec.
+log "mirroring the NKE apt packages the specs install (log: ${STATE_DIR}/apt-mirror.log)"
+mirror_apt_packages >"${STATE_DIR}/apt-mirror.log" 2>&1 &
+APT_MIRROR_PID=$!
 
 # A previous run's database, instances and logs would confuse this one.
 rm -rf "${NICO_VMS_DIR}/.dev"
@@ -595,6 +667,14 @@ log "CWE FORGE_URL=${forge_url}"
 kubectl -n capnico-system rollout status deployment/controller-manager --timeout=5m
 curl -fsS --max-time 5 http://localhost:18080/healthz >/dev/null || fail "nico-vms does not answer on localhost:18080"
 log "management plane is up: CWE, CAPNICo and nico-vms all answer"
+
+if wait "${APT_MIRROR_PID}"; then
+  log "$(tail -n 1 "${STATE_DIR}/apt-mirror.log")"
+  curl -fsS --max-time 5 http://localhost:18080/files/apt/Packages -o /dev/null ||
+    log "WARNING: nico-vms does not serve /files/apt/Packages; the VMs will fetch from S3"
+else
+  log "WARNING: the apt mirror failed; the VMs will fetch from S3 ($(tail -n 1 "${STATE_DIR}/apt-mirror.log"))"
+fi
 
 # ── The suite ───────────────────────────────────────────────────────────────
 # Through go.work: the workspace vendor tree, no downloads (GOPROXY=off in CI).

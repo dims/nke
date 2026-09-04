@@ -18,6 +18,15 @@ without the copy the first create fails. The files hold no credentials: the
 image is fetched with a plain GET, and the one `token_name` line is a template
 variable. When the fleet profile changes, copy it again; nothing syncs it.
 
+The copy carries one line the fleet profile does not: before the `apt-get
+install` lines, `userData.tmpl` checks for a flat apt repository at
+`http://carbide-pxe.forge:18080/files/apt/` (nico-vms' file server) and, when
+its `Packages` index answers, adds it as a source pinned above the image's S3
+repository. `hack/ci/nico-vms-e2e.sh` fills that directory once per run with
+the packages the specs will install, about 2.8 GB, so 16 boots do not each pull
+2 GB from S3. Without the index the line logs one message and apt behaves as
+in the fleet.
+
 `configProfiles/nico-vms-cp.yaml` and `nico-vms-worker.yaml` are copies of the
 fleet config profiles the same specs name, and `../runbooks/` holds the eight
 runbooks their hooks reference. CWE validates at startup that every hook
