@@ -62,17 +62,22 @@
 # bootstrapengine's flattenToHostPlatform instead.
 name: nkectl bootstrap e2e
 
-# See go-build.yml for why the push path list is duplicated by hand instead of
-# shared with workflow_call, and why workflow_call carries no filter.
+# No workflow_call: this lane left the merge gate when it moved to the mirror
+# branch, so it reports as its own advisory check like capd-e2e and nico-e2e.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # The mirror branch copy-pr-bot pushes, which is how capd-e2e, nico-e2e
+      # and local-entrypoint-e2e get a pull request onto NVIDIA runners.
+      - "pull-request/[0-9]+"
     paths:
       - 'cli/**'
       - 'agent/**'
-      - 'controller/hack/capd-kindest-node/**'
+      # The suite builds CWE from controller/Dockerfile. Off the gate the paths
+      # decide, so without this a controller-only change never runs it.
+      - 'controller/**'
       - '.github/workflows/nkectl-bootstrap-e2e.yml'
-  workflow_call:
   # Also twice a day, so a break the paths above filtered out, or one a flake
   # hid, still surfaces within twelve hours. A schedule ignores those paths, so
   # these runs always exercise the whole suite.
@@ -91,11 +96,11 @@ concurrency:
 jobs:
   e2e:
     name: e2e (${{ matrix.provider }})
-    # NVIDIA self-hosted runners reject pull_request events, so keep that gate
-    # on GitHub-hosted Ubuntu. Manual, scheduled, and post-merge runs use the
-    # 16-CPU pool needed by the bootstrap cluster and three nested control
-    # planes. The vTPM check below remains authoritative for both runner types.
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-22.04' || 'linux-amd64-cpu16' }}
+    # The bootstrap cluster and three nested control planes need the 16-CPU pool.
+    # Pull requests reach it through the mirror branch, so no GitHub-hosted
+    # fallback: there, image pulls go to docker.io at rates that have taken
+    # traefik's 55 MB past the smoke install's helm wait.
+    runs-on: linux-amd64-cpu16
     if: github.repository == 'NVIDIA/nke'
     # Generous margin: building the CAPD base node image (TPM tooling, SPIRE
     # bundle fetch, local agent compile) plus the thin derivation on top has
