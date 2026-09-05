@@ -338,6 +338,14 @@ collect_diagnostics() {
   summarize_downloads
   capture virsh-list.txt virsh -c "${LIBVIRT_URI}" list --all
   capture host-routes.txt ip -4 route show
+  # Why a `virsh start` failed: nico-vms keeps only virsh's first line.
+  capture host-memory.txt free -m
+  capture host-disk.txt df -h "${NICO_VMS_DIR}" /
+  capture host-dmesg.txt sh -c 'dmesg 2>/dev/null | tail -200'
+  if [[ -d "${HOME}/.cache/libvirt/qemu/log" ]]; then
+    mkdir -p "${STATE_DIR}/qemu"
+    cp -f "${HOME}"/.cache/libvirt/qemu/log/*.log "${STATE_DIR}/qemu/" 2>/dev/null
+  fi
 
   if redact_diagnostics; then
     touch "${DIAGNOSTICS_MARKER}"
