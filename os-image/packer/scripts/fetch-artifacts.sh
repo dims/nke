@@ -44,6 +44,17 @@ if [[ -n "${K8S_VERSIONS:-}" ]]; then
 fi
 make -C "${repo_root}/os-image/packages/kubeadm-distro" debs "${kubeadm_distro_args[@]}"
 
+# The Calico manifests and images nke-agent installs when it sets up the CNI.
+# Runs after kubeadm-distro and into the same directory: both index it with
+# dpkg-scanpackages when they finish, so the last one to run owns the index and
+# it has to be the one that sees every deb.
+echo "building nke-cni-calico debs (${repo_root}/os-image/packages/cni-calico)"
+cni_calico_args=(OUT_DIR="${ARTIFACTS_DIR}/debs")
+if [[ -n "${CALICO_VERSIONS:-}" ]]; then
+  cni_calico_args+=(CALICO_VERSIONS="${CALICO_VERSIONS}")
+fi
+make -C "${repo_root}/os-image/packages/cni-calico" debs "${cni_calico_args[@]}"
+
 spire_tar="${ARTIFACTS_DIR}/${SPIRE_TARBALL}"
 echo "fetching ${SPIRE_URL}"
 curl --fail --silent --show-error --location \

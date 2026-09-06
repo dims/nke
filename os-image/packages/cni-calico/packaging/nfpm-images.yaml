@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# nfpm spec for nke-cni-calico-images-<stream>. build-deb.sh exports
+# PACKAGE_NAME, CALICO_STREAM, DEB_REVISION, ARCH, IMAGE_DIR and SRC.
+#
+# postinst imports the archive into containerd, so the images are present
+# before the operator asks for them and the node needs no registry.
+
+name: "nke-cni-calico-images-${CALICO_STREAM}"
+arch: "${ARCH}"
+platform: "linux"
+version: "${DEB_REVISION}"
+version_schema: none
+section: admin
+priority: optional
+maintainer: "NKE <nke-dev@exchange.nvidia.com>"
+mtime: "2026-01-01T00:00:00Z"
+description: |
+  Calico ${CALICO_STREAM} container images for NKE nodes
+  Every image the tigera operator resolves for Calico ${CALICO_STREAM},
+  pulled by digest into one docker-archive under ${IMAGE_DIR} and imported
+  into containerd by postinst. Pairs with
+  nke-cni-calico-manifests-${CALICO_STREAM}; together they let a node install
+  Calico with no registry access at all.
+
+depends:
+  - containerd
+
+contents:
+  - src: "${SRC}/images.tgz"
+    dst: "${IMAGE_DIR}/calico-images_${CALICO_STREAM}_linux_${ARCH}.tgz"
+    file_info: { mode: 0644 }
+    expand: true
+  - src: "${SRC}/images.tgz.sha256"
+    dst: "${IMAGE_DIR}/calico-images_${CALICO_STREAM}_linux_${ARCH}.tgz.sha256"
+    file_info: { mode: 0644 }
+    expand: true
+
+# build-deb.sh renders postinst -> postinst.rendered first: nfpm expands no
+# variables in `scripts:`, so the paths and package name are substituted there.
+scripts:
+  postinstall: ./postinst.rendered
