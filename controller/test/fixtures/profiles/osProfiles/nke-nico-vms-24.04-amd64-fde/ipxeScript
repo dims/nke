@@ -1,6 +1,13 @@
 #!ipxe
-set boot-loader https://d1veq6e8nuk2fy.cloudfront.net/nke-isos/qcow/efi/x86_64/2026-06-25/1782410681/qcow-imager.efi
-set image-url https://d1veq6e8nuk2fy.cloudfront.net/nke-isos/qcow/images/24.04/x86_64/lvm/2026-06-25/1035/nke-24.04-x86_64-lvm-2026-06-25-1035.qcow2
+# The image this fixture boots is built by os-image/ and served by nico-vms'
+# own file server, so the lane pulls nothing from a CDN.
+#
+# nico-vms never fetches boot-loader: it parses image_url out of this script
+# (internal/ipxe/parser.go) and does the GRUB work qcow-imager.efi would do on
+# bare metal (internal/ipxe/bootcmd.go). The variable stays because a real
+# bare-metal boot needs it; point it at your own published EFI there.
+set boot-loader unused-by-nico-vms
+set image-url http://carbide-pxe.forge:18080/files/images/nke-node.qcow2
 set disk-strategy {{ .DiskSelectionStrategy }}
 
 # You probably don't need to change these
