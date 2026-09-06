@@ -125,6 +125,12 @@ jobs:
       # rather than the run. Without it every pull went to docker.io, and on a
       # GitHub-hosted runner traefik's 55 MB took 5m48s against a 5m helm wait.
       NKE_E2E_DOCKERHUB_MIRROR: dc.local.gha-runners.nvidia.com
+      # The same mirror for the ephemeral bootstrap Kind cluster, which pulls
+      # the temporal, postgres, SPIRE and Cluster API images itself. Unmirrored,
+      # six merges in eight minutes put twelve of these clusters on Docker Hub's
+      # anonymous limit at once and the last four to start got 429 Too Many
+      # Requests (2026-09-06).
+      NKECTL_BOOTSTRAP_DOCKERHUB_MIRROR: dc.local.gha-runners.nvidia.com
       # nerdctl >= 1.7.0 is kind's own stated minimum for its nerdctl
       # provider (KIND_EXPERIMENTAL_PROVIDER=nerdctl, added in kind v0.23.0,
       # comfortably below the v0.32.0 this job pins). nerdctl-full bundles a
