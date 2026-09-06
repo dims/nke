@@ -6,8 +6,11 @@
 # (internal/ipxe/parser.go) and does the GRUB work qcow-imager.efi would do on
 # bare metal (internal/ipxe/bootcmd.go). The variable stays because a real
 # bare-metal boot needs it; point it at your own published EFI there.
+#
+# The gateway address, not carbide-pxe.forge: nico-vms downloads the image on
+# the host, and the host resolves that name only through dnsmasq on the bridge.
 set boot-loader unused-by-nico-vms
-set image-url http://carbide-pxe.forge:18080/files/images/nke-node.qcow2
+set image-url http://172.30.0.1:18080/files/images/nke-node.qcow2
 set disk-strategy {{ .DiskSelectionStrategy }}
 
 # You probably don't need to change these
