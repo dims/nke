@@ -107,7 +107,7 @@ type Config struct {
 	FWEAPIKey string `env:"FWE_API_KEY"`
 
 	// ProfilesDir is the directory from which to read osProfiles and configProfiles
-	ProfilesDir string `env:"PROFILES_DIR" default:"./profiles"`
+	ProfilesDir string `env:"PROFILES_DIR" default:"./profiles/example/profiles"`
 
 	// RunbooksDir is the optional directory containing config-profile hook scripts.
 	// When omitted, hook execution looks under ProfilesDir/runbooks before falling
