@@ -12,8 +12,9 @@ import (
 	"github.com/NVIDIA/nke/controller/internal/config"
 )
 
-// Validate rejects the compiled-in dev-default database credentials, except in
-// the test Forge environment, where they are what a local run is meant to use.
+// Validate rejects the compiled-in dev-default database credentials on any
+// database that is not loopback. On loopback they are what a local run is meant
+// to use.
 func TestValidateWeakDBCredentials(t *testing.T) {
 	t.Parallel()
 
@@ -22,36 +23,43 @@ func TestValidateWeakDBCredentials(t *testing.T) {
 		SpireServerAPIAddress: "spire-server.spire-server.svc.cluster.local:8081",
 		SpireJoinTokenTTL:     time.Hour,
 	}
-	const weak = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
 	tests := []struct {
 		name                  string
-		forgeEnvironment      string
 		dbConnectionString    string
 		cnpgSuperuserPassword string
 		wantErr               bool
 	}{
 		{
-			name:               "production rejects the dev default",
-			forgeEnvironment:   "production",
-			dbConnectionString: weak,
+			name:               "dev default against an in-cluster database",
+			dbConnectionString: "postgres://postgres:postgres@postgres-postgresql.postgres.svc.cluster.local:5432/cwe?sslmode=disable",
 			wantErr:            true,
 		},
 		{
-			name:                  "production accepts it once a password overrides it",
-			forgeEnvironment:      "production",
-			dbConnectionString:    weak,
+			name:               "dev default against a remote address",
+			dbConnectionString: "postgres://postgres:postgres@10.0.0.5:5432/cwe?sslmode=disable",
+			wantErr:            true,
+		},
+		{
+			name:                  "in-cluster, but a password overrides the default",
+			dbConnectionString:    "postgres://postgres:postgres@postgres-postgresql.postgres.svc.cluster.local:5432/cwe?sslmode=disable",
 			cnpgSuperuserPassword: "from-vault",
 		},
 		{
-			name:               "production accepts credentials that are not the dev default",
-			forgeEnvironment:   "production",
-			dbConnectionString: "postgres://cwe:strong@localhost:5432/cwe?sslmode=disable",
+			name:               "credentials that are not the dev default",
+			dbConnectionString: "postgres://cwe:strong@postgres-postgresql.postgres.svc.cluster.local:5432/cwe?sslmode=disable",
 		},
 		{
-			name:               "the test Forge environment accepts the dev default",
-			forgeEnvironment:   config.ForgeEnvironmentTest,
-			dbConnectionString: weak,
+			name:               "dev default on localhost is a developer's own container",
+			dbConnectionString: "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
+		},
+		{
+			name:               "dev default on the loopback address",
+			dbConnectionString: "postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable",
+		},
+		{
+			name:               "dev default on IPv6 loopback",
+			dbConnectionString: "postgres://postgres:postgres@[::1]:5432/postgres?sslmode=disable",
 		},
 	}
 
@@ -60,7 +68,6 @@ func TestValidateWeakDBCredentials(t *testing.T) {
 			t.Parallel()
 
 			cfg := base
-			cfg.ForgeEnvironment = tt.forgeEnvironment
 			cfg.DBConnectionString = tt.dbConnectionString
 			cfg.CnpgSuperuserPassword = tt.cnpgSuperuserPassword
 
@@ -72,4 +79,21 @@ func TestValidateWeakDBCredentials(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+// The guard must not key on FORGE_ENVIRONMENT. That variable selects a Forge
+// backend and says nothing about which database the connection string names, so
+// setting it must not stand the check down.
+func TestValidateWeakDBCredentialsIgnoresForgeEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{
+		MetricsListenAddress:  "127.0.0.1:9090",
+		SpireServerAPIAddress: "spire-server.spire-server.svc.cluster.local:8081",
+		SpireJoinTokenTTL:     time.Hour,
+		DBConnectionString:    "postgres://postgres:postgres@postgres-postgresql.postgres.svc.cluster.local:5432/cwe?sslmode=disable",
+		ForgeEnvironment:      config.ForgeEnvironmentTest,
+	}
+
+	require.ErrorContains(t, cfg.Validate(), "CNPG_SUPERUSER_PASSWORD")
 }
