@@ -397,7 +397,12 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.MetricsListenAddress) == "" {
 		return fmt.Errorf("METRICS_LISTEN_ADDRESS must not be empty")
 	}
-	if c.CnpgSuperuserPassword == "" && strings.Contains(c.DBConnectionString, "postgres:postgres@") {
+	// FORGE_ENVIRONMENT=test is the local-development Forge environment: it signs
+	// its own JWT rather than authenticating against NGC. The dev-default
+	// credentials are the point there, so requiring a password to override them
+	// only blocked `make run` on a laptop.
+	if c.ForgeEnvironment != ForgeEnvironmentTest &&
+		c.CnpgSuperuserPassword == "" && strings.Contains(c.DBConnectionString, "postgres:postgres@") {
 		return fmt.Errorf("DB_CONNECTION_STRING uses weak dev-default credentials: set CNPG_SUPERUSER_PASSWORD")
 	}
 	if c.SpireServerAPIAddress == "" {
