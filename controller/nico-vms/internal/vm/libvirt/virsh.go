@@ -548,13 +548,13 @@ func dirHasEntries(dir string) bool {
 
 // extractUUIDFromXML pulls <uuid>...</uuid> out of virsh dumpxml output.
 func extractUUIDFromXML(dumpxml string) string {
-	const open, close = "<uuid>", "</uuid>"
-	start := strings.Index(dumpxml, open)
+	const openTag, closeTag = "<uuid>", "</uuid>"
+	start := strings.Index(dumpxml, openTag)
 	if start < 0 {
 		return ""
 	}
-	rest := dumpxml[start+len(open):]
-	end := strings.Index(rest, close)
+	rest := dumpxml[start+len(openTag):]
+	end := strings.Index(rest, closeTag)
 	if end < 0 {
 		return ""
 	}
