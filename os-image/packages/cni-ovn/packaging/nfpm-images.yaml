@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# nfpm spec for nke-cni-ovn-images-<stream>. build-deb.sh exports
+# PACKAGE_NAME, OVN_STREAM, DEB_REVISION, ARCH, IMAGE_DIR and SRC.
+#
+# postinst imports the archive into containerd, so the images are present
+# before the ovnkube pods ask for them and the node needs no registry.
+
+name: "nke-cni-ovn-images-${OVN_STREAM}"
+arch: "${ARCH}"
+platform: "linux"
+version: "${DEB_REVISION}"
+version_schema: none
+section: admin
+priority: optional
+maintainer: "NKE <nke-dev@exchange.nvidia.com>"
+mtime: "2026-01-01T00:00:00Z"
+description: |
+  ovn-kubernetes ${OVN_STREAM} container images for NKE nodes
+  The ovn-c and ovnkube-c images the ovn-kubernetes ${OVN_STREAM} chart runs
+  with values-nke.yaml, pulled by digest into one docker-archive under
+  ${IMAGE_DIR} and imported into containerd by postinst. Pairs with
+  nke-cni-ovn-charts-${OVN_STREAM}; together they let a node install OVN
+  with no registry access at all.
+
+depends:
+  - containerd
+
+# One image set per node, same as the charts package.
+provides:
+  - nke-cni-ovn-images
+conflicts:
+  - nke-cni-ovn-images
+
+contents:
+  - src: "${SRC}/images.tgz"
+    dst: "${IMAGE_DIR}/ovn-images_${OVN_STREAM}_linux_${ARCH}.tgz"
+    file_info: { mode: 0644 }
+    expand: true
+  - src: "${SRC}/images.tgz.sha256"
+    dst: "${IMAGE_DIR}/ovn-images_${OVN_STREAM}_linux_${ARCH}.tgz.sha256"
+    file_info: { mode: 0644 }
+    expand: true
+
+# build-deb.sh renders postinst -> postinst.rendered first: nfpm expands no
+# variables in `scripts:`, so the paths and package name are substituted there.
+scripts:
+  postinstall: ./postinst.rendered

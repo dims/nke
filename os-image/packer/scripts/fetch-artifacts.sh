@@ -55,6 +55,19 @@ if [[ -n "${CALICO_VERSIONS:-}" ]]; then
 fi
 make -C "${repo_root}/os-image/packages/cni-calico" debs "${cni_calico_args[@]}"
 
+# The ovn-kubernetes chart and images live in NGC's nv-ngn org and need a key.
+# CI has none, so these debs are opt-in: set NGC_API_KEY to include them.
+if [[ -n "${NGC_API_KEY:-}" ]]; then
+  echo "building nke-cni-ovn debs (${repo_root}/os-image/packages/cni-ovn)"
+  cni_ovn_args=(OUT_DIR="${ARTIFACTS_DIR}/debs")
+  if [[ -n "${OVN_STREAMS:-}" ]]; then
+    cni_ovn_args+=(OVN_STREAMS="${OVN_STREAMS}")
+  fi
+  make -C "${repo_root}/os-image/packages/cni-ovn" debs "${cni_ovn_args[@]}"
+else
+  echo "NGC_API_KEY is unset; skipping the nke-cni-ovn debs (this image cannot install OVN offline)"
+fi
+
 spire_tar="${ARTIFACTS_DIR}/${SPIRE_TARBALL}"
 echo "fetching ${SPIRE_URL}"
 curl --fail --silent --show-error --location \

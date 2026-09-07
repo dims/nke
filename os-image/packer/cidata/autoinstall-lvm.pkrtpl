@@ -74,6 +74,9 @@ autoinstall:
     - conntrack
     - socat
     - ethtool
+    # nke-agent installs ovn-kubernetes against the host's Open vSwitch
+    # (values-nke.yaml sets ovs-node: false) and checks for ovs-vsctl first.
+    - openvswitch-switch
 
   # security, not all: "all" was tried and reverted -- it pulls in every
   # linux-firmware-* split package (AMD/Intel/Broadcom/Qualcomm/Mellanox/
