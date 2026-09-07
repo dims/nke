@@ -237,6 +237,20 @@ jobs:
           GOPROXY: https://proxy.golang.org,direct
         run: make -C os-image/packer os-image-fde ARCH=amd64
 
+      # The build leaves ~10 GB the suite never reads: both ISO copies, the
+      # staged artifacts and debs, kubeadm-distro's downloads, the module cache.
+      # Keep the qcow2: nico-vms copies it into its cache when the first VM boots.
+      # The last line is the suite's starting point, for when a runner dies
+      # mid-suite and takes its log with it.
+      - name: Drop the image build's leftovers
+        run: |
+          set -euo pipefail
+          rm -rf os-image/packer/{iso-cache,artifacts,packer_cache,build-logs,.ssh}
+          make -C os-image/packages/kubeadm-distro clean
+          go clean -modcache
+          pgrep -a qemu-system || true
+          uptime; free -g; df -h "${GITHUB_WORKSPACE}"
+
       - name: Run the nico-vms E2E suite
         env:
           # clusterctl reads provider manifests through the GitHub API; this

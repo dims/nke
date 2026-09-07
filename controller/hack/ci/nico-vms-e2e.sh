@@ -139,13 +139,16 @@ start_state_monitor() {
   ) >"${STATE_DIR}/state-timeline.log" 2>&1 &
   STATE_MONITOR_PID=$!
   # One line every 3 minutes on stdout too; a 90-minute spec is otherwise silent.
+  # The host figures are for a runner that dies mid-suite and takes its log
+  # with it: the streamed lines are all that survives.
   (
     while true; do
       sleep 180
       machines="$(kubectl get machines -A --no-headers 2>/dev/null | awk '{print $4}' | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')"
       instances="$(curl -fsS --max-time 5 -H "Authorization: Bearer ${NICO_VMS_TOKEN}" \
         "http://localhost:18080/v2/org/${NICO_VMS_ORG_ID}/forge/instance" 2>/dev/null | jq -r '[.[]?.status] | group_by(.) | map("\(.[0])=\(length)") | join(" ")' 2>/dev/null)"
-      log "progress: machines[${machines:-none}] instances[${instances:-none}] domains=$(virsh -c "${LIBVIRT_URI}" list --name 2>/dev/null | grep -c . || true)"
+      host="load $(cut -d' ' -f1-3 /proc/loadavg), mem avail $(awk '/MemAvailable/ {printf "%dG", $2/1048576}' /proc/meminfo), disk avail $(df -h --output=avail "${STATE_DIR}" | tail -1 | tr -d ' ')"
+      log "progress: machines[${machines:-none}] instances[${instances:-none}] domains=$(virsh -c "${LIBVIRT_URI}" list --name 2>/dev/null | grep -c . || true) host[${host}]"
     done
   ) &
   PROGRESS_MONITOR_PID=$!
