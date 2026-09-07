@@ -121,3 +121,32 @@ func mkStateDir(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 }
+
+// Both candidate directories must end up with the same EK, so the cert is
+// right whichever one libvirt picks.
+func TestMirrorSwtpmState(t *testing.T) {
+	const uuid = "7e720345-740c-4d62-a258-e9d3193826cf"
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	systemSwtpmRoot = t.TempDir()
+	t.Cleanup(func() { systemSwtpmRoot = "/var/lib/libvirt/swtpm" })
+
+	r := &virsh{uri: "qemu:///session"}
+	seeded := r.swtpmStatePath(uuid)
+	mkStateDir(t, seeded)
+
+	if err := r.mirrorSwtpmState(seeded, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	mirrored := filepath.Join(systemSwtpmStatePath(uuid), "tpm2-00.permall")
+	got, err := os.ReadFile(mirrored)
+	if err != nil {
+		t.Fatalf("state not mirrored to %s: %v", mirrored, err)
+	}
+	if string(got) != "x" {
+		t.Errorf("mirrored state = %q, want the bytes of the original", got)
+	}
+	if _, _, mismatch := r.swtpmStateMismatch("<domain><uuid>" + uuid + "</uuid></domain>"); mismatch {
+		t.Error("mirrored state must not read as a mismatch")
+	}
+}

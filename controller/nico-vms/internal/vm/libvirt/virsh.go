@@ -364,7 +364,53 @@ func (r *virsh) setupTPM(ctx context.Context, workDir string) (domainUUID string
 	}
 
 	_ = os.RemoveAll(certDir)
+
+	// stateDir is a guess: libvirt's swtpm location depends on which driver
+	// serves the domain, which the URI does not always say. Mirror the finished
+	// state to the other candidate so both hold this same EK. Running
+	// swtpm_setup twice would not do — that yields two different EKs, and the
+	// cert would name the wrong one half the time.
+	if mirrorErr := r.mirrorSwtpmState(stateDir, domainUUID); mirrorErr != nil {
+		// Not fatal: the seeded path may still be the one libvirt uses, and
+		// TPMEKCert refuses the cert if it is not.
+		fmt.Fprintf(os.Stderr, "nico-vms: could not mirror swtpm state for %s: %v\n", domainUUID, mirrorErr)
+	}
 	return domainUUID, true, nil
+}
+
+// mirrorSwtpmState copies finished swtpm state to the candidate directory
+// libvirt would use if the URI guess in swtpmStatePath is wrong.
+func (r *virsh) mirrorSwtpmState(stateDir, domainUUID string) error {
+	dst := systemSwtpmStatePath(domainUUID)
+	if dst == stateDir {
+		dst = sessionSwtpmStatePath(domainUUID)
+	}
+
+	entries, err := os.ReadDir(stateDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(stateDir, entry.Name()))
+		if readErr != nil {
+			return readErr
+		}
+		if writeErr := os.WriteFile(filepath.Join(dst, entry.Name()), data, 0o644); writeErr != nil {
+			return writeErr
+		}
+	}
+	// libvirt's system driver runs swtpm as the swtpm user, which must be able
+	// to write this state back. Only root can hand it over.
+	if os.Geteuid() == 0 {
+		_ = exec.Command("chown", "-R", "swtpm:swtpm", dst).Run()
+	}
+	return nil
 }
 
 // ensureSwtpmConfig creates user-writable swtpm configuration files so that
