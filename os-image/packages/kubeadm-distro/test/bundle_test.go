@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -105,8 +106,12 @@ func fakeKubeadm() string {
 type fixtureServer struct {
 	*httptest.Server
 	requests atomic.Int64
-	bodies   map[string][]byte
-	sha256   map[string]string
+
+	// mu guards bodies and sha256: cases rewrite them from the test goroutine
+	// while the server's handler reads them from its own.
+	mu     sync.RWMutex
+	bodies map[string][]byte
+	sha256 map[string]string
 }
 
 // newFixtureServer serves one artifact per component plus its publisher
@@ -153,7 +158,9 @@ func newFixtureServer(t *testing.T, signer *gpgKey) *fixtureServer {
 
 	fs.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fs.requests.Add(1)
+		fs.mu.RLock()
 		body, ok := fs.bodies[r.URL.Path]
+		fs.mu.RUnlock()
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -165,18 +172,28 @@ func newFixtureServer(t *testing.T, signer *gpgKey) *fixtureServer {
 }
 
 // digestOf returns the sha256 the server advertises for one served artifact.
-func (fs *fixtureServer) digestOf(path string) string { return fs.sha256[path] }
+func (fs *fixtureServer) digestOf(path string) string {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.sha256[path]
+}
 
 // replaceArtifact rewrites one artifact and its bare `.sha256` document, so a
 // case can make upstream move under a lock that was already written.
 func (fs *fixtureServer) replaceArtifact(path string, body []byte) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	fs.bodies[path] = body
 	fs.sha256[path] = fmt.Sprintf("%x", sha256.Sum256(body))
 	fs.bodies[path+".sha256"] = []byte(fs.sha256[path] + "\n")
 }
 
 // serve replaces one served document outright, checksum shape and all.
-func (fs *fixtureServer) serve(path string, body []byte) { fs.bodies[path] = body }
+func (fs *fixtureServer) serve(path string, body []byte) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.bodies[path] = body
+}
 
 // helmPath, runcPath and runcChecksumPath are the fixture paths cases reach
 // for by name.
@@ -204,7 +221,14 @@ type gpgKey struct {
 // newGPGKey generates a throwaway key in its own GNUPGHOME.
 func newGPGKey(t *testing.T, uid string) *gpgKey {
 	t.Helper()
-	home := t.TempDir()
+	// Not t.TempDir(): gpg-agent's socket lives under GNUPGHOME, and a Unix
+	// socket path is capped at 104 bytes on macOS. t.TempDir() puts the test
+	// name in the path and blows through that on the GitHub macOS runner, so
+	// gpg cannot start the agent and key generation fails with "No agent
+	// running". A short name directly under the temp root stays well inside.
+	home, err := os.MkdirTemp("", "gpg-")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	require.NoError(t, os.Chmod(home, 0o700))
 	k := &gpgKey{home: home, uid: uid}
 	out, err := k.run(t, "--quick-generate-key", uid, "default", "default", "never")
