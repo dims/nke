@@ -411,15 +411,26 @@ func (r *virsh) swtpmLocalCADir() string {
 // state for the given domain UUID, derived from the connection URI.
 func (r *virsh) swtpmStatePath(domainUUID string) string {
 	if !strings.Contains(r.uri, "system") {
-		// session mode (default)
-		xdg := os.Getenv("XDG_CONFIG_HOME")
-		if xdg == "" {
-			home, _ := os.UserHomeDir()
-			xdg = filepath.Join(home, ".config")
-		}
-		return filepath.Join(xdg, "libvirt", "qemu", "swtpm", domainUUID, "tpm2")
+		return sessionSwtpmStatePath(domainUUID) // session mode (default)
 	}
-	return filepath.Join("/var/lib/libvirt/swtpm", domainUUID, "tpm2")
+	return systemSwtpmStatePath(domainUUID)
+}
+
+func sessionSwtpmStatePath(domainUUID string) string {
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	if xdg == "" {
+		home, _ := os.UserHomeDir()
+		xdg = filepath.Join(home, ".config")
+	}
+	return filepath.Join(xdg, "libvirt", "qemu", "swtpm", domainUUID, "tpm2")
+}
+
+// systemSwtpmRoot is where libvirt's system driver keeps swtpm state.
+// A variable so tests can point it somewhere writable.
+var systemSwtpmRoot = "/var/lib/libvirt/swtpm"
+
+func systemSwtpmStatePath(domainUUID string) string {
+	return filepath.Join(systemSwtpmRoot, domainUUID, "tpm2")
 }
 
 // TPMEKCert reads the base64-encoded EK certificate from the working
@@ -445,7 +456,63 @@ func (r *virsh) TPMEKCert(ctx context.Context, machineID string) (string, error)
 	if readErr != nil {
 		return "", fmt.Errorf("TPM device present but failed to read EK cert at %s: %w", certPath, readErr)
 	}
+
+	// setupTPM seeds swtpm state and reads the EK from it, guessing libvirt's
+	// location for that state from the URI. A wrong guess means libvirt made its
+	// own state with a different EK, so this cert names a key the guest lacks.
+	// Refuse it: it feeds the TPM attestor allowlist, where the miss surfaces
+	// later as an x509 error naming nothing that led to it.
+	if used, uuid, mismatch := r.swtpmStateMismatch(dumpxml); mismatch {
+		return "", fmt.Errorf(
+			"stale EK cert for %s: libvirt used swtpm state in %s, cert came from %s (libvirt URI %q)",
+			machineID, used, r.swtpmStatePath(uuid), r.uri)
+	}
 	return strings.TrimSpace(string(certData)), nil
+}
+
+// swtpmStateMismatch reports whether libvirt runs this domain against swtpm
+// state other than the directory setupTPM seeded. An absent directory is not
+// evidence either way, so an unreadable layout returns false rather than
+// failing a working VM.
+func (r *virsh) swtpmStateMismatch(dumpxml string) (usedPath, domainUUID string, mismatch bool) {
+	domainUUID = extractUUIDFromXML(dumpxml)
+	if domainUUID == "" {
+		return "", "", false
+	}
+
+	seeded := r.swtpmStatePath(domainUUID)
+	// The other candidate: what libvirt uses when the URI does not describe the
+	// driver actually serving the domain.
+	other := systemSwtpmStatePath(domainUUID)
+	if seeded == other {
+		other = sessionSwtpmStatePath(domainUUID)
+	}
+
+	if dirHasEntries(other) && !dirHasEntries(seeded) {
+		return other, domainUUID, true
+	}
+	return "", domainUUID, false
+}
+
+// dirHasEntries reports whether dir exists and holds at least one entry.
+func dirHasEntries(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	return err == nil && len(entries) > 0
+}
+
+// extractUUIDFromXML pulls <uuid>...</uuid> out of virsh dumpxml output.
+func extractUUIDFromXML(dumpxml string) string {
+	const open, close = "<uuid>", "</uuid>"
+	start := strings.Index(dumpxml, open)
+	if start < 0 {
+		return ""
+	}
+	rest := dumpxml[start+len(open):]
+	end := strings.Index(rest, close)
+	if end < 0 {
+		return ""
+	}
+	return strings.TrimSpace(rest[:end])
 }
 
 // extractDiskPathFromXML pulls the first <source file='...'> path from
