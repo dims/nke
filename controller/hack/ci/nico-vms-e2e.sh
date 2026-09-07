@@ -349,13 +349,28 @@ export TILT_DISABLE_ANALYTICS=1
 # rather than fetching a bundle, as local-entrypoint-e2e already does.
 export INSTALL_CNI_AFTER_INIT="${INSTALL_CNI_AFTER_INIT:-true}"
 
+# ── The image the tenant nodes boot ─────────────────────────────────────────
+# Unset, the OS profile boots whatever its ipxeScript names. Point
+# NKE_E2E_NODE_IMAGE at a qcow2 built in this job to boot that instead: nico-vms
+# copies a local path straight into its image cache, so nothing is downloaded
+# and no artifact comes from outside this checkout.
+if [[ -n "${NKE_E2E_NODE_IMAGE:-}" ]]; then
+  [[ -f "${NKE_E2E_NODE_IMAGE}" ]] ||
+    fail "NKE_E2E_NODE_IMAGE=${NKE_E2E_NODE_IMAGE} is not a file"
+  profile_ipxe="${CWE_PROFILES_DIR}/osProfiles/nke-nico-vms-24.04-amd64-fde/ipxeScript"
+  log "booting the locally built image ${NKE_E2E_NODE_IMAGE}"
+  sed -i "s|^set image-url .*|set image-url ${NKE_E2E_NODE_IMAGE}|" "${profile_ipxe}"
+  grep -qxF "set image-url ${NKE_E2E_NODE_IMAGE}" "${profile_ipxe}" ||
+    fail "could not point the OS profile at ${NKE_E2E_NODE_IMAGE}"
+fi
+
 # ── The agent the tenant nodes run ──────────────────────────────────────────
-# The OS profile's userData apt-installs nke-agent from the bundle server, then
-# replaces it with http://carbide-pxe.forge:18080/files/node-agent/nke-agent
-# when that URL answers -- and silently keeps the packaged one otherwise. Build
-# it from this checkout and stage it at the path the template names. The file
-# root is set explicitly: the default sits beside the database in .dev/, which
-# this script wipes.
+# The image bakes an nke-agent, and the OS profile's userData replaces it with
+# http://carbide-pxe.forge:18080/files/node-agent/nke-agent when that URL
+# answers -- and silently keeps the baked one otherwise. Build it from this
+# checkout and stage it at the path the template names, so the run tests this
+# revision's agent whatever the image carries. The file root is set explicitly:
+# the default sits beside the database in .dev/, which this script wipes.
 export NICO_VMS_FILES_DIR="${NICO_VMS_DIR}/var/files"
 AGENT_URL_PATH="$(grep -oE 'files/[a-z-]+/nke-agent' "${CWE_PROFILES_DIR}/osProfiles/nke-nico-vms-24.04-amd64-fde/userData.tmpl" | head -1)"
 [[ -n "${AGENT_URL_PATH}" ]] || fail "the nico-vms OS profile no longer downloads nke-agent from /files/"

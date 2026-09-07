@@ -97,6 +97,8 @@ jobs:
       NKE_E2E_STATE_DIR: ${{ github.workspace }}/controller/.local/nico-vms-e2e/${{ github.run_id }}-${{ github.run_attempt }}
       NKE_BRINGUP_ARTIFACT_DIR: ${{ github.workspace }}/controller/.local/nico-vms-e2e/${{ github.run_id }}-${{ github.run_attempt }}/host
       GOPROXY: "off"
+      # Same pin as os-image-artifact.yml, for the node image build below.
+      PACKER_SHA256: "cfefdea4ac580eba7b254ef34d25b756d4961741004e3e701a1476594d13e64a"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -192,12 +194,59 @@ jobs:
       - name: Prepare the runner host
         run: ./controller/test/kubeadm/scripts/setup-ci-host.sh
 
+      # The node image the tenant VMs boot, built here rather than pulled from
+      # the bundle server. It carries the agent, SPIRE and the kubeadm and CNI
+      # debs, so nothing the nodes install comes from outside this checkout.
+      # dpkg-dev: dpkg-scanpackages indexes the debs fetch-artifacts.sh builds.
+      - name: Install the node image build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cloud-image-utils genisoimage unzip p7zip-full xorriso dpkg-dev
+
+      - name: Read the pinned Packer version
+        id: packer-version
+        run: echo "packer_version=$(make --no-print-directory print-PACKER_VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Packer
+        env:
+          PACKER_VERSION: ${{ steps.packer-version.outputs.packer_version }}
+        run: |
+          set -euo pipefail
+          zip="packer_${PACKER_VERSION}_linux_amd64.zip"
+          tmp="$(mktemp -d)"
+          curl -fsSL -o "${tmp}/${zip}" \
+            "https://releases.hashicorp.com/packer/${PACKER_VERSION}/${zip}"
+          actual="$(sha256sum "${tmp}/${zip}" | awk '{print $1}')"
+          if [[ "${actual}" != "${PACKER_SHA256}" ]]; then
+            echo "::error::checksum mismatch for ${zip}: got ${actual}, expected ${PACKER_SHA256}"
+            exit 1
+          fi
+          unzip -d "${tmp}" "${tmp}/${zip}" packer
+          sudo install -m 0755 "${tmp}/packer" /usr/local/bin/packer
+          packer version
+
+      # FDE to match the OS profile the suite uses, which boots the LUKS image.
+      - name: Build the node image
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No GOPROXY=off here, unlike the job default: the deb packaging
+          # builds the pinned crane and nfpm with `go install ...@version`,
+          # which needs the module proxy. The suite itself still runs with the
+          # job's GOPROXY=off.
+          GOPROXY: https://proxy.golang.org,direct
+        run: make -C os-image/packer os-image-fde ARCH=amd64
+
       - name: Run the nico-vms E2E suite
         env:
           # clusterctl reads provider manifests through the GitHub API; this
           # runner's egress hits the anonymous rate limit.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./controller/hack/ci/nico-vms-e2e.sh
+        run: |
+          set -euo pipefail
+          NKE_E2E_NODE_IMAGE="$(ls "${GITHUB_WORKSPACE}"/os-image/packer/output-fde/*.qcow2)"
+          export NKE_E2E_NODE_IMAGE
+          ./controller/hack/ci/nico-vms-e2e.sh
 
       # Copies the VM console logs; must run before the upload.
       - name: Tear down the runner host
