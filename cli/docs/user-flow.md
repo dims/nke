@@ -4,6 +4,12 @@ What `nkectl` does today, in the order an operator uses it. Every command
 below is on `main`; the two steps the CLI does not cover yet are marked.
 `nkectl <command> --help` is the authoritative reference for flags.
 
+The commands work. Whether a run of them succeeds also depends on the node
+image: the site cluster attests nodes by TPM and installs a CNI from a package,
+and the image built by [`os-image/`](../../os-image/) does neither yet
+([#533](https://github.com/NVIDIA/nke/pull/533),
+[#534](https://github.com/NVIDIA/nke/pull/534)).
+
 ## Commands
 
 | Command | What it does | Status |
@@ -53,6 +59,19 @@ is in [examples/sitespec.yaml](../examples/sitespec.yaml).
 
 ### 2. Bootstrap the site cluster
 
+Three image variables are required. `bootstrap site` fails before it creates
+anything if any is unset, and nothing else names them:
+
+```bash
+export NKECTL_CWE_IMAGE=<cwe-controller image>
+export NKECTL_CWE_PROFILES_IMAGE=<profiles image>
+export NKECTL_CAPI_PROVISIONED_IMAGE=<provisioned provider image>
+```
+
+Running the binary from outside a checkout also needs `NKECTL_CWE_CHART_PATH`
+and `NKECTL_CAPI_PROVISIONED_PATH`. Neither is checked up front, so a mistake
+surfaces only after the Kind cluster and several Helm installs exist.
+
 ```bash
 # Validate only: load, check and print the spec, touch nothing
 nkectl bootstrap site -f sitespec.yaml --dry-run
@@ -62,7 +81,8 @@ REGISTRY_API_KEY=... nkectl bootstrap site -f sitespec.yaml
 ```
 
 The command needs Docker or nerdctl on the host (`--bootstrap-provider`, nerdctl
-by default) and network reach to the hosts' `nke-agent` ports. On success it
+by default), `clusterctl` on `PATH`, and network reach to the hosts'
+`nke-agent` ports. On success it
 writes `my-tier0-site.kubeconfig` in the working directory (`--kubeconfig-out`
 changes the path) and removes the Kind cluster. On failure it writes cluster
 diagnostics to `cluster-diagnostics/` first; `--keep-bootstrap-cluster` keeps
