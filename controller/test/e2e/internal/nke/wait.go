@@ -293,7 +293,9 @@ func (c *Client) WaitForProvisionedNodeCountStable(ctx context.Context, nodePool
 // replacement fully rolled the control plane onto new nodes at the same desired
 // count, rather than merely that the count recovered.
 func (c *Client) WaitForControlPlaneNodesRolled(ctx context.Context, clusterID openapi_types.UUID, desired int, oldNodeIDs map[openapi_types.UUID]struct{}) error {
-	deadline := time.After(c.opts.Provision)
+	// One Provision budget per node: the roll replaces them one at a time.
+	budget := time.Duration(desired) * c.opts.Provision
+	deadline := time.After(budget)
 	ticker := time.NewTicker(c.opts.Poll)
 	defer ticker.Stop()
 
@@ -301,7 +303,7 @@ func (c *Client) WaitForControlPlaneNodesRolled(ctx context.Context, clusterID o
 	for {
 		select {
 		case <-deadline:
-			return fmt.Errorf("timeout after %v waiting for control-plane roll on cluster %s (last error: %s)", c.opts.Provision, clusterID, lastError)
+			return fmt.Errorf("timeout after %v waiting for control-plane roll on cluster %s (last error: %s)", budget, clusterID, lastError)
 		case <-ctx.Done():
 			return fmt.Errorf("waiting for control-plane roll on cluster %s (last error: %s): %w", clusterID, lastError, ctx.Err())
 		case <-ticker.C:
