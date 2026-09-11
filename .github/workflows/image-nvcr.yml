@@ -403,7 +403,11 @@ jobs:
               return
             fi
 
+            # The layout's top-level index wraps the source index, and crane push
+            # tags that wrapper. The push also uploads the source index by
+            # digest, so move the tag onto it and the digest survives.
             crane push --index "${layout}" "${target}"
+            crane tag "${dst}@${source_digest}" "${tag}"
             target_digest="$(crane digest "${target}")"
             if [[ "${target_digest}" != "${source_digest}" ]]; then
               echo "::error::${target} pushed with digest ${target_digest}, expected ${source_digest}"
