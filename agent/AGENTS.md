@@ -33,7 +33,7 @@ Pushing the tag publishes:
 
 - OCI binaries to GHCR / NVCR (`.github/workflows/agent-artifact*.yml`)
 - `.deb`s to the apt-publisher S3 intake, as assets on the GitHub Release
-  for that tag, and to GHCR as `ghcr.io/nvidia/nke/agent-deb`
+  for that tag, and to GHCR as `ghcr.io/dsx-ai-factory/nke/agent-deb`
   (`.github/workflows/agent-deb-publish.yml`)
 
 `make` / `./build/agent.sh` derive `VERSION` from:

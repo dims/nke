@@ -34,7 +34,7 @@ git push origin os-image/v0.1.0
 
 Pushing the tag runs `.github/workflows/os-image-artifact.yml`: Packer bakes the
 qcow2, `make boot-smoke` must pass, then the disk is published to
-`ghcr.io/nvidia/nke/os-image` and the GitHub Release is created. A failed bake
+`ghcr.io/dsx-ai-factory/nke/os-image` and the GitHub Release is created. A failed bake
 or smoke test does not publish.
 
 `make` stamps `nke-os-image-check` from:
