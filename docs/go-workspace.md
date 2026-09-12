@@ -1,6 +1,6 @@
 # The Go workspace
 
-This repository holds nine Go modules. `go.work` at the root ties together all
+This repository holds ten Go modules. `go.work` at the root ties together all
 of them, so one `make build` covers the whole tree and one Go toolchain version
 applies across it.
 
@@ -12,6 +12,7 @@ when the first two go stale.
 | Module | In `go.work` | Why |
 |---|---|---|
 | `agent` | yes | builds from public dependencies |
+| `bread` | yes | builds from public dependencies |
 | `cli` | yes | builds from public dependencies |
 | `cluster-api-provider-provisioned` | yes | builds from public dependencies |
 | `controller/api` | yes | builds from public dependencies |

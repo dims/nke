@@ -53,11 +53,12 @@ What distinguishes it from a generic CAPI distribution:
 | `agent/` | The on-node daemon. Exposes a gRPC API the controller drives to run `kubeadm`, install a CNI, and configure disk and etcd encryption. |
 | `cli/` | `nkectl`, the command-line interface. Validates a site spec and drives bootstrap. |
 | `controller/nico-sim/` | `nico-sim`, the NICo-compatible VM and Docker-container simulator used by development and tests. |
+| `bread/` | The tenant API types `NKECluster`, `NodePool` and `NKENode`: one hub struct per kind, with per-field markers that select the tenant, operator and internal views. |
 | `build/` | Build and publish scripts per component. |
 | `docs/` | Architecture, getting started, and admin guides. |
 | `os-image/` | Reference Ubuntu node OS image (spec + Packer) and `nke-os-image-check`. |
 
-**Nine Go modules**, tied together by a workspace at the repository root, each
+**Ten Go modules**, tied together by a workspace at the repository root, each
 independently buildable. `make build` links six binaries: `agent`, `updater`,
 `controller`, `nkectl`, `capd-reboot-controller` and
 `nke-os-image-check`.
