@@ -65,7 +65,7 @@ repository's `bin/`, and `make version-check` runs it with `--version`.
   float `latest` for SPIRE.
 - Do not hard-require `/dev/kvm`. `packer/Makefile` and `boot-smoke.sh` probe
   for it and fall back to `tcg`, because the CI runners are containers without
-  it (https://github.com/NVIDIA/nke/issues/219).
+  it (https://github.com/dsx-ai-factory/nke/issues/219).
 - `nke-agent` is built from this checkout's `agent/` source at bake time
   (`make -C agent build-amd64` in `fetch-artifacts.sh`); no prebuilt artifact
   is pulled. Its version is the checkout's `git describe --match 'agent/v*'`.

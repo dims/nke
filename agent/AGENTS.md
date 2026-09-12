@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-The **NKE agent** lives at `agent/` in the [NVIDIA/nke](https://github.com/NVIDIA/nke) monorepo.
+The **NKE agent** lives at `agent/` in the [dsx-ai-factory/nke](https://github.com/dsx-ai-factory/nke) monorepo.
 It is a Go-based gRPC server (systemd service) that runs on Kubernetes nodes and provides remote management for Kubeadm and software package/bundle installation.
 
 **Primary use cases:**
