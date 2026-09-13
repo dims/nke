@@ -36,7 +36,8 @@ name: OS Image Artifact
 #
 #   oras pull ghcr.io/dsx-ai-factory/nke/os-image-fde:v0.1.0-amd64 --platform linux/amd64
 #
-# arm64 only builds the non-FDE variant for now (see the matrix below) --
+# arm64 only builds the non-FDE variant for now, and only on a manual run
+# with build_arm64 (a tag push builds amd64 alone; see the matrix below) --
 # there is no os-image-fde-arm64 tag yet. It also only publishes to GHCR, not
 # the GitHub Release: the release step runs on the amd64 leg only, unchanged
 # from before this matrix existed, since restructuring release-asset
@@ -54,6 +55,11 @@ on:
     inputs:
       dry_run:
         description: "Build and validate everything, but skip the GHCR push. The tag trigger always publishes; this only applies to a manual run."
+        required: false
+        default: false
+        type: boolean
+      build_arm64:
+        description: "Also build the arm64 non-FDE image. Off by default: under tcg cross-arch emulation the live installer has never finished inside the budget (see the matrix comment)."
         required: false
         default: false
         type: boolean
@@ -81,19 +87,20 @@ jobs:
     # No arm64-labeled runner exists in this org's pool, so the arm64 leg
     # cross-builds on this same amd64 runner under QEMU's tcg software
     # emulation -- there is no way to KVM-accelerate an arm64 guest on x86
-    # hardware regardless of runner choice. build_fde is false for arm64:
-    # this is a first pass at arm64 support, not full parity -- see the
-    # header comment above.
+    # hardware regardless of runner choice. FDE stays amd64-only: this is a
+    # first pass at arm64 support, not full parity -- see the header comment
+    # above.
+    #
+    # arm64 is opt-in (workflow_dispatch with build_arm64). Under tcg the
+    # Ubuntu live installer has never finished inside the budget: both
+    # attempts for os-image/v0.1.0-rc.1 spent 2 h reaching 82 min of guest
+    # uptime with snapd and subiquity still starting, curtin never ran. Until
+    # a native arm64 runner exists, a tag push builds amd64 alone instead of
+    # holding an L4 runner for a guaranteed red.
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: amd64
-            timeout_minutes: 120
-            build_fde: true
-          - arch: arm64
-            timeout_minutes: 240
-            build_fde: false
+        arch: ${{ fromJSON(inputs.build_arm64 && '["amd64","arm64"]' || '["amd64"]') }}
     # Packer QEMU needs /dev/kvm for the amd64 leg. linux-amd64-cpu16 (a
     # container-based pool) never exposed it, forcing every bake onto QEMU's
     # tcg software emulation — confirmed directly: a full FDE bake took
@@ -112,7 +119,7 @@ jobs:
     # tcg. arm64: non-FDE bake + boot-smoke only, but under tcg cross-arch
     # emulation, which has no local measurement yet to size against -- 240m
     # is a starting guess, expect to revisit once real runs land.
-    timeout-minutes: ${{ matrix.timeout_minutes }}
+    timeout-minutes: ${{ matrix.arch == 'arm64' && 240 || 120 }}
     permissions:
       contents: write
       packages: write
@@ -267,7 +274,7 @@ jobs:
             --username "${{ github.actor }}" --password-stdin
 
       - name: Build the FDE node image
-        if: matrix.build_fde
+        if: matrix.arch == 'amd64'
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make -C os-image/packer os-image-fde ARCH=${{ matrix.arch }}
@@ -276,9 +283,9 @@ jobs:
       # reboot-auto-unlocks. No manual/scripted console interaction needed —
       # the image auto-unlocks its own first boot via a build-time luks.key=
       # GRUB parameter (see os-image/docs/full-disk-encryption.md). Only run
-      # where the FDE image was actually built (see matrix.build_fde above).
+      # where the FDE image was actually built (amd64 only, see above).
       - name: Validate FDE TPM unlock (demo-fde.sh)
-        if: matrix.build_fde
+        if: matrix.arch == 'amd64'
         working-directory: os-image
         run: ./demo-fde.sh
 
@@ -318,7 +325,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          if [[ "${{ matrix.build_fde }}" == "true" ]]; then
+          if [[ "${{ matrix.arch }}" == "amd64" ]]; then
             fde_src="$(ls os-image/packer/output-fde/*.qcow2)"
             qemu-img convert -p -c -O qcow2 "${fde_src}" dist/nke-node-fde.qcow2
             qemu-img info dist/nke-node-fde.qcow2
@@ -347,7 +354,7 @@ jobs:
           done
 
           variants=(non-fde)
-          if [[ "${{ matrix.build_fde }}" == "true" ]]; then
+          if [[ "${{ matrix.arch }}" == "amd64" ]]; then
             variants+=(fde)
           fi
 
@@ -372,7 +379,7 @@ jobs:
         run: |
           set -euo pipefail
           oras manifest fetch --pretty "${REPO_NON_FDE}:sha-${GITHUB_SHA}-${{ matrix.arch }}"
-          if [[ "${{ matrix.build_fde }}" == "true" ]]; then
+          if [[ "${{ matrix.arch }}" == "amd64" ]]; then
             oras manifest fetch --pretty "${REPO_FDE}:sha-${GITHUB_SHA}-${{ matrix.arch }}"
           fi
 
