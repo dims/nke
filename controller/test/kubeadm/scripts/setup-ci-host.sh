@@ -598,7 +598,15 @@ else
   # shellcheck disable=SC2064  # expand IMAGE_TMP now, not at trap time
   trap "rm -rf '${IMAGE_TMP}'" EXIT
 
-  if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 120 \
+  # --retry alone skips a mid-transfer reset: curl counts only timeouts and
+  # HTTP 408/429/5xx as transient, so one reset failed the whole run.
+  # --speed-limit ends a stall in 30s instead of crawling to --max-time; this
+  # image arrives at 90 to 170 MB/s, so a 1 MB/s floor only fires on a path
+  # that has already failed.
+  CURL_FETCH=(-fsSL --retry 3 --retry-all-errors --retry-delay 5
+              --speed-limit 1048576 --speed-time 30)
+
+  if ! curl "${CURL_FETCH[@]}" --max-time 120 \
        -o "${IMAGE_TMP}/SHA256SUMS" "${IMAGE_BASE_URL}/SHA256SUMS"; then
     fail "could not download SHA256SUMS from ${IMAGE_BASE_URL}"
   fi
@@ -607,7 +615,7 @@ else
   expected="$(awk -v n="${IMAGE_NAME}" '$2 == n || $2 == "*" n {print $1}' "${IMAGE_TMP}/SHA256SUMS" | head -1)"
   [[ -n "${expected}" ]] || fail "no SHA256SUMS entry for ${IMAGE_NAME}"
 
-  if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 900 \
+  if ! curl "${CURL_FETCH[@]}" --max-time 900 \
        -o "${IMAGE_TMP}/${IMAGE_NAME}" "${IMAGE_BASE_URL}/${IMAGE_NAME}"; then
     fail "could not download the base image from ${IMAGE_BASE_URL}/${IMAGE_NAME}"
   fi
