@@ -583,6 +583,19 @@ case "${DEB_ARCH}" in
 esac
 IMAGE_NAME="${NKE_BRINGUP_IMAGE_NAME:-${IMAGE_NAME}}"
 
+# A runner image can pre-stage the base image, so a run copies it instead of
+# fetching 600 MB per job. Absent, nothing changes and the download runs.
+IMAGE_CACHE="${NKE_BRINGUP_IMAGE_CACHE:-/opt/nke/base-images}"
+if [[ ! -s "${BASE_IMAGE}" && -s "${IMAGE_CACHE}/${IMAGE_NAME}" ]]; then
+  mkdir -p "$(dirname "${BASE_IMAGE}")"
+  if cp --reflink=auto "${IMAGE_CACHE}/${IMAGE_NAME}" "${BASE_IMAGE}"; then
+    log "Base image copied from ${IMAGE_CACHE}/${IMAGE_NAME}"
+  else
+    rm -f "${BASE_IMAGE}"
+    log "WARNING: could not copy from ${IMAGE_CACHE}; falling back to the download"
+  fi
+fi
+
 if [[ -s "${BASE_IMAGE}" ]] && qemu-img info "${BASE_IMAGE}" >/dev/null 2>&1; then
   log "Base image already present at ${BASE_IMAGE}"
 else
