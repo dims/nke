@@ -4,11 +4,18 @@
 # nico-vms backend E2E: the only lane that runs the nico-vms specs, on real KVM
 # tenant nodes booted from the NKE FDE image. Body: controller/hack/ci/nico-vms-e2e.sh,
 # host mode, because nico-vms needs libvirt, the host bridge and CAP_NET_ADMIN.
-# Advisory. A run takes about 2.5 hours on the one KVM runner, so the push
-# paths are only the lane's own inputs, and a mirror-branch run is skipped
-# unless the pull request itself touches them; everything else the lane depends
-# on is covered by the twice-daily schedule. Mirror-branch pushes are the PR
-# trigger; self-hosted runners get no pull_request events.
+# Advisory. A run takes about 2.5 hours, so the push paths are only the lane's
+# own inputs, and a mirror-branch run is skipped unless the pull request itself
+# touches them; everything else the lane depends on is covered by the
+# twice-daily schedule. Mirror-branch pushes are the PR trigger; self-hosted
+# runners get no pull_request events.
+#
+# Two legs, one per architecture. amd64 uses the hosted GPU label, the only
+# hosted one with /dev/kvm; arm64 uses the self-hosted fleet, which gained
+# nested KVM in #797. The arm64 leg has never booted a tenant VM. Three things
+# are untested there and only a run settles them: the osProfile asks for
+# console=ttyS1 where aarch64 uses ttyAMA0, domain_xml.go names tpm-tis rather
+# than tpm-tis-device, and it defines two <serial> ports where virt has one.
 
 name: NICo VMs E2E
 
@@ -78,11 +85,29 @@ jobs:
       relevant_paths: '^agent/(internal/agent/open_vswitch.*\.go$|pkg/agent/proto/node_agent\.proto$)|^controller/(Tiltfile$|internal/temporal/activities/configure_open_vswitch\.go$|internal/temporal/workflows/provision_node\.go$|nico-sim/|hack/nico-provider/|hack/ci/nico-vms-e2e\.sh$|test/e2e/open_vswitch_test\.go$|test/kubeadm/scripts/)|^\.github/workflows/(nico-vms-e2e|e2e-pr-path-filter)\.yml$'
 
   nico-vms-e2e:
-    name: nico-vms-e2e (amd64, KVM)
-    # The one label with /dev/kvm; see kubeadm-bringup-e2e.yml for why.
-    runs-on: linux-amd64-gpu-l4-latest-1
+    name: nico-vms-e2e (${{ matrix.arch }}, KVM)
+    runs-on: ${{ matrix.runner }}
     needs: changes
     if: github.repository == 'dsx-ai-factory/nke' && needs.changes.outputs.run_e2e == 'true'
+    strategy:
+      # arm64 is unproven; a failure there must not cancel amd64.
+      fail-fast: false
+      # amd64 is linux-amd64-gpu-l4-latest-1, the one hosted label with
+      # /dev/kvm; see kubeadm-bringup-e2e.yml. arm64 is nke-arm64-16c64g on the
+      # self-hosted fleet, which holds two of that shape, so one run takes half
+      # of it.
+      #
+      # arm64 is dispatch only. The profile's image-url is CloudFront, which
+      # answers 403 to the fleet, so the leg needs os-image-tag to boot at all,
+      # and a push or a schedule cannot supply one. Put it back on the schedule
+      # once image-url has a default that does not need the input.
+      #
+      # fromJSON is the only way to vary the legs by event: the matrix context
+      # is not available in a job-level if.
+      matrix:
+        include: ${{ github.event_name == 'workflow_dispatch'
+          && fromJSON('[{"arch":"amd64","runner":"linux-amd64-gpu-l4-latest-1"},{"arch":"arm64","runner":"nke-arm64-16c64g"}]')
+          || fromJSON('[{"arch":"amd64","runner":"linux-amd64-gpu-l4-latest-1"}]') }}
     # Unmeasured. Two tenant clusters of three to six VMs, one of them upgraded
     # through two Kubernetes versions. Generous until there is data.
     timeout-minutes: 330
@@ -114,6 +139,13 @@ jobs:
       NKE_BRINGUP_ARTIFACT_DIR: ${{ github.workspace }}/controller/.local/nico-vms-e2e/${{ github.run_id }}-${{ github.run_attempt }}/host
       GOPROXY: "off"
     steps:
+      # Fail in seconds rather than after the setup and a boot that cannot work.
+      - name: arm64 needs a node image tag
+        if: matrix.arch == 'arm64' && env.NKE_E2E_OS_IMAGE_TAG == ''
+        run: |
+          echo "::error::Re-run with os-image-tag set, e.g. sha-<commit>. The arm64 profile pins image-url to CloudFront, which answers 403 to the self-hosted fleet."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
