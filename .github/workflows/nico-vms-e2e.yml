@@ -113,6 +113,10 @@ jobs:
     timeout-minutes: 330
     permissions:
       contents: read
+      # os-image-tag pulls the node image from GHCR, and those packages are
+      # private. A job-level permissions block replaces the defaults, so
+      # without this the token cannot read them.
+      packages: read
     env:
       # nico-vms needs cgo for sqlite; without it the binary fails at the first query.
       CGO_ENABLED: "1"
@@ -199,6 +203,14 @@ jobs:
       # step list the same either way.
       - name: Set up ORAS
         uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+
+      # Same pair as os-image-artifact.yml, which pushes these packages.
+      # Unconditional, like the step above, so the step list does not change
+      # with the input.
+      - name: Sign in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${GHCR_TOKEN}" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
 
       - name: Set up Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
