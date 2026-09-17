@@ -293,7 +293,9 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: nico-vms-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          # The architecture belongs in the name: both legs upload, and without
+          # it the two are one name and you cannot tell which leg you opened.
+          name: nico-vms-e2e-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ env.NKE_E2E_STATE_DIR }}/
             !${{ env.NKE_E2E_STATE_DIR }}/cwe-e2e.test
