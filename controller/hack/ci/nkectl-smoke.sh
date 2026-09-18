@@ -36,14 +36,13 @@ nkectl_smoke_build() {
   (cd ../cli && CGO_ENABLED=0 GOOS=linux GOARCH="${1}" go build -o "${NKECTL_BIN}" ./cmd/nkectl)
 }
 
-nkectl_smoke_stage() {
-  docker cp "${NKECTL_BIN}" "${RUNNER_NAME}:/usr/local/bin/nkectl"
-}
-
-# Every call is bounded. Nothing here had a timeout, and a hang does not just
-# stall: the job cap sends SIGTERM, handle_signal sets SKIP_DIAGNOSTICS, and the
-# lane loses its whole diagnostics artifact to one stuck CLI call.
+# Bounds every blocking docker exec and docker cp below. A hang is worse than a
+# failure: the job cap's SIGTERM makes handle_signal skip diagnostics.
 NKECTL_SMOKE_TIMEOUT="${NKECTL_SMOKE_TIMEOUT:-60}"
+
+nkectl_smoke_stage() {
+  timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp "${NKECTL_BIN}" "${RUNNER_NAME}:/usr/local/bin/nkectl"
+}
 
 nkectl_exec() {
   timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec \
@@ -71,7 +70,7 @@ nkectl_smoke() {
     kubectl -n "${NKECTL_SMOKE_CWE_NAMESPACE}" port-forward \
     "svc/${NKECTL_SMOKE_CWE_SERVICE}" "${NKECTL_SMOKE_CWE_PORT}:${NKECTL_SMOKE_CWE_PORT}"
 
-  runner_exec nkectl config set-site --name e2e \
+  nkectl_exec config set-site --name e2e \
     --url "http://127.0.0.1:${NKECTL_SMOKE_CWE_PORT}" \
     --kubeconfig /state/management.kubeconfig >/dev/null
 
@@ -85,8 +84,9 @@ sites:
     kubeconfig: ""
 current-site: e2e
 EOF
-  runner_exec mkdir -p /tmp/nkectl-no-auth/nkectl
-  docker cp "${no_auth_config}" \
+  timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec "${RUNNER_NAME}" \
+    mkdir -p /tmp/nkectl-no-auth/nkectl
+  timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp "${no_auth_config}" \
     "${RUNNER_NAME}:/tmp/nkectl-no-auth/nkectl/config.yaml" >/dev/null
 
   # Doubles as the readiness wait for the forward.
@@ -304,7 +304,8 @@ nkectl_smoke_stage_spec() {
   local name="$1"
   local host_path="${TMP_DIR}/nkectl-smoke-${name}.yaml"
   cat >"${host_path}" || return 1
-  docker cp "${host_path}" "${RUNNER_NAME}:$(nkectl_smoke_spec_path "${name}")" >/dev/null
+  timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp \
+    "${host_path}" "${RUNNER_NAME}:$(nkectl_smoke_spec_path "${name}")" >/dev/null
 }
 
 # Bodies the OpenAPI validator rejects before any handler runs: no row, no
