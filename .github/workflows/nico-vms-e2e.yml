@@ -12,10 +12,10 @@
 #
 # Two legs, one per architecture. amd64 uses the hosted GPU label, the only
 # hosted one with /dev/kvm; arm64 uses the self-hosted fleet, which gained
-# nested KVM in #797. The arm64 leg has never booted a tenant VM. Three things
-# are untested there and only a run settles them: the osProfile asks for
-# console=ttyS1 where aarch64 uses ttyAMA0, domain_xml.go names tpm-tis rather
-# than tpm-tis-device, and it defines two <serial> ports where virt has one.
+# nested KVM in #797. Both resolve their node image from GHCR rather than the
+# profile's CloudFront URL, which the fleet answers 403 to. The arm64 leg has
+# never booted a tenant VM, so read a failure there as new information rather
+# than as a regression.
 
 name: NICo VMs E2E
 
@@ -56,7 +56,7 @@ on:
         default: nico-vms && happy-path
         type: string
       os-image-tag:
-        description: "Boot the node image this repository built, e.g. v0.1.0-rc.1. Empty keeps the profile's pinned CloudFront image."
+        description: "Pin every leg to one node image, e.g. v0.1.0-rc.1. The tag needs an image for each architecture the run covers, because each leg appends its own. Empty is usually what you want: it resolves the newest per architecture."
         required: false
         default: ""
         type: string
@@ -96,18 +96,12 @@ jobs:
       # /dev/kvm; see kubeadm-bringup-e2e.yml. arm64 is nke-arm64-16c64g on the
       # self-hosted fleet, which holds two of that shape, so one run takes half
       # of it.
-      #
-      # arm64 is dispatch only. The profile's image-url is CloudFront, which
-      # answers 403 to the fleet, so the leg needs os-image-tag to boot at all,
-      # and a push or a schedule cannot supply one. Put it back on the schedule
-      # once image-url has a default that does not need the input.
-      #
-      # fromJSON is the only way to vary the legs by event: the matrix context
-      # is not available in a job-level if.
       matrix:
-        include: ${{ github.event_name == 'workflow_dispatch'
-          && fromJSON('[{"arch":"amd64","runner":"linux-amd64-gpu-l4-latest-1"},{"arch":"arm64","runner":"nke-arm64-16c64g"}]')
-          || fromJSON('[{"arch":"amd64","runner":"linux-amd64-gpu-l4-latest-1"}]') }}
+        include:
+          - arch: amd64
+            runner: linux-amd64-gpu-l4-latest-1
+          - arch: arm64
+            runner: nke-arm64-16c64g
     # Unmeasured. Two tenant clusters of three to six VMs, one of them upgraded
     # through two Kubernetes versions. Generous until there is data.
     timeout-minutes: 330
@@ -143,13 +137,6 @@ jobs:
       NKE_BRINGUP_ARTIFACT_DIR: ${{ github.workspace }}/controller/.local/nico-vms-e2e/${{ github.run_id }}-${{ github.run_attempt }}/host
       GOPROXY: "off"
     steps:
-      # Fail in seconds rather than after the setup and a boot that cannot work.
-      - name: arm64 needs a node image tag
-        if: matrix.arch == 'arm64' && env.NKE_E2E_OS_IMAGE_TAG == ''
-        run: |
-          echo "::error::Re-run with os-image-tag set, e.g. sha-<commit>. The arm64 profile pins image-url to CloudFront, which answers 403 to the self-hosted fleet."
-          exit 1
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
