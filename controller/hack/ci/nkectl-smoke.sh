@@ -56,6 +56,11 @@ nkectl_no_auth_exec() {
     "${RUNNER_NAME}" nkectl "$@"
 }
 
+# `test` in the runner, for asserting on files nkectl did or did not write.
+nkectl_smoke_runner_test() {
+  timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec "${RUNNER_NAME}" test "$@"
+}
+
 # Port-forward rather than the apiserver service proxy: the proxy does not
 # forward a bearer token to CWE, which is why wait_for_zero_tenant_clusters
 # counts CAPI objects instead of calling the API.
@@ -126,6 +131,27 @@ EOF
     '['*|'{'*|null*) ;;
     *) log "nkectl smoke: -o json did not emit JSON: ${out}" >&2; return 1 ;;
   esac
+
+  # user-flow.md step 7 documents -o yaml beside -o json. Nothing else here
+  # asserts it, and the two take different branches of the printer.
+  if ! out="$(nkectl_exec get clusters -o yaml 2>&1)"; then
+    log "nkectl smoke: 'get clusters -o yaml' failed: ${out}" >&2
+    return 1
+  fi
+  case "${out}" in
+    '{'*) log "nkectl smoke: -o yaml emitted JSON: ${out}" >&2; return 1 ;;
+  esac
+
+  # The documented aliases. A verb that lost one is a user-visible break the
+  # plural-only assertions above would not catch.
+  if ! nkectl_exec get cluster >/dev/null 2>&1; then
+    log "nkectl smoke: 'get cluster' (singular alias) failed" >&2
+    return 1
+  fi
+  if ! nkectl_exec get nodepool >/dev/null 2>&1; then
+    log "nkectl smoke: 'get nodepool' (singular alias) failed" >&2
+    return 1
+  fi
 
   # Read-path negatives. Each asserts the message, not just a non-zero exit: an
   # exit code alone cannot tell "the lookup ran and found nothing" apart from
@@ -199,6 +225,20 @@ nkectl_smoke_local_commands() {
     return 1
   fi
 
+  # user-flow.md documents short|yaml|json. json is above; these are the rest.
+  if ! out="$(nkectl_exec version -o short 2>&1)"; then
+    log "nkectl smoke: 'version -o short' failed: ${out}" >&2
+    return 1
+  fi
+  if ! out="$(nkectl_exec version -o yaml 2>&1)"; then
+    log "nkectl smoke: 'version -o yaml' failed: ${out}" >&2
+    return 1
+  fi
+  if ! grep -q 'buildVersion:' <<<"${out}"; then
+    log "nkectl smoke: 'version -o yaml' emitted no buildVersion: ${out}" >&2
+    return 1
+  fi
+
   # view must show the site set-site wrote, not an empty document.
   if ! out="$(nkectl_exec config view 2>&1)"; then
     log "nkectl smoke: 'config view' failed: ${out}" >&2
@@ -255,6 +295,18 @@ nkectl_smoke_kubeconfig_negatives() {
 
   if out="$(nkectl_exec get kubeconfig 2>&1)"; then
     log "nkectl smoke: 'get kubeconfig' with no cluster name was accepted" >&2
+    return 1
+  fi
+
+  # user-flow.md step 8 documents --output-file. A failed fetch must not leave
+  # a file behind for a later step to read as a kubeconfig.
+  if out="$(nkectl_exec get kubeconfig "${NKECTL_SMOKE_ABSENT}" \
+    --output-file /tmp/nkectl-smoke-kubeconfig 2>&1)"; then
+    log "nkectl smoke: 'get kubeconfig --output-file' succeeded for an absent cluster" >&2
+    return 1
+  fi
+  if nkectl_smoke_runner_test -e /tmp/nkectl-smoke-kubeconfig; then
+    log "nkectl smoke: 'get kubeconfig --output-file' wrote a file despite failing" >&2
     return 1
   fi
 }
@@ -575,6 +627,25 @@ nkectl_smoke_write_assertions() {
   fi
   if ! jq -e '.[0].teleportEnabled == true' <<<"${out}" >/dev/null; then
     log "nkectl smoke: 'patch cluster' did not apply teleportEnabled=true: ${out}" >&2
+    return 1
+  fi
+
+  # user-flow.md steps 9 and 11 document --patch-file beside --patch. It takes
+  # a different branch: a file read rather than an inline document.
+  nkectl_smoke_stage_spec patch <<'EOF' || return 1
+teleportEnabled: false
+EOF
+  if ! out="$(nkectl_exec patch cluster "${name}" \
+    --patch-file "$(nkectl_smoke_spec_path patch)" 2>&1)"; then
+    log "nkectl smoke: 'patch cluster --patch-file' failed: ${out}" >&2
+    return 1
+  fi
+  if ! out="$(nkectl_exec get clusters "${name}" -o json 2>&1)"; then
+    log "nkectl smoke: 'get clusters ${name} -o json' failed after --patch-file: ${out}" >&2
+    return 1
+  fi
+  if ! jq -e '.[0].teleportEnabled == false' <<<"${out}" >/dev/null; then
+    log "nkectl smoke: '--patch-file' did not apply teleportEnabled=false: ${out}" >&2
     return 1
   fi
 
