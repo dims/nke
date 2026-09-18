@@ -161,12 +161,102 @@ EOF
     return 1
   fi
 
+  nkectl_smoke_local_commands || return 1
+  nkectl_smoke_kubeconfig_negatives || return 1
   nkectl_smoke_nodepool_negatives || return 1
   nkectl_smoke_providers || return 1
   nkectl_smoke_create_rejections || return 1
   nkectl_smoke_write_round_trip || return 1
 
-  log "PASS: nkectl reached CWE, authenticated, listed clusters and node pools, read providers, and had malformed creates rejected"
+  log "PASS: nkectl reached CWE, authenticated, listed clusters and node pools, read providers, fetched a kubeconfig, and had malformed creates rejected"
+}
+
+# version and config: every command that needs no CWE. They are the first two
+# steps of the operator journey in cli/docs/user-flow.md, and a broken one is
+# invisible to every other assertion here because they all run after set-site.
+nkectl_smoke_local_commands() {
+  local out
+
+  if ! out="$(nkectl_exec version 2>&1)"; then
+    log "nkectl smoke: 'version' failed: ${out}" >&2
+    return 1
+  fi
+  if ! grep -q '^nkectl ' <<<"${out}"; then
+    log "nkectl smoke: 'version' printed no version line: ${out}" >&2
+    return 1
+  fi
+
+  if ! out="$(nkectl_exec version -o json 2>&1)"; then
+    log "nkectl smoke: 'version -o json' failed: ${out}" >&2
+    return 1
+  fi
+  if ! jq -e '.buildVersion' >/dev/null 2>&1 <<<"${out}"; then
+    log "nkectl smoke: 'version -o json' emitted no buildVersion: ${out}" >&2
+    return 1
+  fi
+  if out="$(nkectl_exec version -o bogus 2>&1)"; then
+    log "nkectl smoke: 'version -o bogus' was accepted" >&2
+    return 1
+  fi
+
+  # view must show the site set-site wrote, not an empty document.
+  if ! out="$(nkectl_exec config view 2>&1)"; then
+    log "nkectl smoke: 'config view' failed: ${out}" >&2
+    return 1
+  fi
+  if ! grep -q 'e2e' <<<"${out}"; then
+    log "nkectl smoke: 'config view' does not list the e2e site: ${out}" >&2
+    return 1
+  fi
+
+  # Selecting the only configured site is a no-op, so it cannot strand the
+  # calls after it. The absent name is the real assertion.
+  if ! out="$(nkectl_exec config use-site e2e 2>&1)"; then
+    log "nkectl smoke: 'config use-site e2e' failed: ${out}" >&2
+    return 1
+  fi
+  if out="$(nkectl_exec config use-site "${NKECTL_SMOKE_ABSENT}" 2>&1)"; then
+    log "nkectl smoke: 'config use-site ${NKECTL_SMOKE_ABSENT}' succeeded against a site that does not exist" >&2
+    return 1
+  fi
+  if ! grep -q 'not found in config' <<<"${out}"; then
+    log "nkectl smoke: 'config use-site' failed without a not-found message: ${out}" >&2
+    return 1
+  fi
+
+  # Wiring only. generate sitespec needs no CWE and its output is exercised for
+  # real by nkectl-bootstrap-e2e, so this just proves the shipped binary still
+  # has the command and enforces its required flag.
+  if out="$(nkectl_exec generate sitespec smoke-gen 2>&1)"; then
+    log "nkectl smoke: 'generate sitespec' ran without the required --nodes" >&2
+    return 1
+  fi
+  if ! grep -q 'nodes' <<<"${out}"; then
+    log "nkectl smoke: 'generate sitespec' failed for some reason other than --nodes: ${out}" >&2
+    return 1
+  fi
+}
+
+# get kubeconfig reaches the management cluster directly, not CWE: site
+# kubeconfig -> Secret nke-system/<cluster>-admin-kubeconfig. Nothing else here
+# exercises that path, and the not-found message is the only proof the CLI
+# looked in the right namespace under the right name.
+nkectl_smoke_kubeconfig_negatives() {
+  local out
+
+  if out="$(nkectl_exec get kubeconfig "${NKECTL_SMOKE_ABSENT}" 2>&1)"; then
+    log "nkectl smoke: 'get kubeconfig ${NKECTL_SMOKE_ABSENT}' succeeded against a cluster that does not exist" >&2
+    return 1
+  fi
+  if ! grep -q "nke-system/${NKECTL_SMOKE_ABSENT}-admin-kubeconfig" <<<"${out}"; then
+    log "nkectl smoke: 'get kubeconfig' named the wrong secret: ${out}" >&2
+    return 1
+  fi
+
+  if out="$(nkectl_exec get kubeconfig 2>&1)"; then
+    log "nkectl smoke: 'get kubeconfig' with no cluster name was accepted" >&2
+    return 1
+  fi
 }
 
 # Node pool read-path negatives, asserting the message like the cluster ones
@@ -380,7 +470,8 @@ nkectl_smoke_write_round_trip() {
     log "nkectl smoke: SKIP the write round trip, NKE_E2E_NKECTL_SMOKE_WRITE is not true"
     return 0
   fi
-  # Only CAPD can take a DockerCluster spec.
+  # CAPD only because no NicoCluster spec has been written for the smoke yet.
+  # The seed IDs are constants (tenant_test.go:971), not a plumbing problem.
   if [[ "${BACKEND:-}" != "capd" ]]; then
     log "nkectl smoke: SKIP the write round trip on the ${BACKEND:-unset} backend"
     return 0
@@ -484,6 +575,22 @@ nkectl_smoke_write_assertions() {
   fi
   if ! jq -e '.[0].teleportEnabled == true' <<<"${out}" >/dev/null; then
     log "nkectl smoke: 'patch cluster' did not apply teleportEnabled=true: ${out}" >&2
+    return 1
+  fi
+
+  # A real cluster name, so this resolves further than the absent-name case:
+  # autoProvisionDisabled means tenantaccess never writes the Secret, and the
+  # message must say so rather than blaming the name.
+  if out="$(nkectl_exec get kubeconfig "${name}" 2>&1)"; then
+    log "nkectl smoke: 'get kubeconfig ${name}' returned a kubeconfig for an unprovisioned cluster" >&2
+    return 1
+  fi
+  if ! grep -q "nke-system/${name}-admin-kubeconfig" <<<"${out}"; then
+    log "nkectl smoke: 'get kubeconfig ${name}' named the wrong secret: ${out}" >&2
+    return 1
+  fi
+  if ! grep -q 'not be provisioned yet' <<<"${out}"; then
+    log "nkectl smoke: 'get kubeconfig ${name}' failed for some reason other than the missing Secret: ${out}" >&2
     return 1
   fi
 
