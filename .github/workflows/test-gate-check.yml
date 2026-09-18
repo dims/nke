@@ -118,7 +118,13 @@ jobs:
             // quick succession put the first SHA's event after the head moved.
             // So resolve the number and re-read the current head rather than
             // trusting the event. conflict-check.yml does the same.
-            const mirrored = context.ref.match(/^refs\/heads\/pull-request\/([0-9]+)$/);
+            //
+            // Keyed on the event, not just the ref shape: a workflow_dispatch
+            // aimed at a pull-request/<N> ref matches the same pattern, and
+            // would silently check one pull request when a sweep was asked for.
+            const mirrored = context.eventName === 'push'
+              ? context.ref.match(/^refs\/heads\/pull-request\/([0-9]+)$/)
+              : null;
             const open = mirrored
               ? [await github.rest.pulls.get({ ...context.repo, pull_number: Number(mirrored[1]) })
                   .then((r) => r.data, (e) => { if (e.status === 404) return null; throw e; })]
