@@ -135,11 +135,15 @@ jobs:
         shell: bash
         env:
           CF_DOMAIN: ${{ steps.meta.outputs.cf_domain }}
+          S3_URI: ${{ steps.meta.outputs.s3_uri }}
           RELEASE: ${{ steps.meta.outputs.release }}
         run: |
           set -euo pipefail
+          # Same key layout upload-s3-flat.sh writes to: everything in S3_URI
+          # after the bucket name, then the same S3_PREFIX used to upload.
+          s3_path="${S3_URI#s3://*/}"
           for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
-            url="https://${CF_DOMAIN}/nke-packages/nkectl/releases/${RELEASE}/${platform}/nkectl-${platform}"
+            url="https://${CF_DOMAIN}/${s3_path}/nkectl/releases/${RELEASE}/${platform}/nkectl-${platform}"
             status="$(curl -s -o /dev/null -w '%{http_code}' -I "${url}")"
             if [[ "${status}" != "200" ]]; then
               echo "::error::${url} returned ${status}, not 200"
