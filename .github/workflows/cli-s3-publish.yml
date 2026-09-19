@@ -14,10 +14,13 @@ name: CLI S3 Publish
 # not a reuse of `apt-intake` -- that name and scope are conceptually
 # apt-specific. Required environment vars:
 #
-#   S3_PUBLISH_S3_URI       variable  e.g. s3://nke-prod-assets/nke-packages
-#   S3_PUBLISH_AWS_ROLE_ARN variable  role ARN with write access to the
-#                                     nkectl/* prefix under that URI
-#   S3_PUBLISH_AWS_REGION   variable  optional, defaults to us-west-2
+#   S3_PUBLISH_S3_URI             variable  e.g. s3://nke-prod-assets/nke-packages
+#   S3_PUBLISH_AWS_ROLE_ARN       variable  role ARN with write access to the
+#                                           nkectl/* prefix under that URI
+#   S3_PUBLISH_AWS_REGION         variable  optional, defaults to us-west-2
+#   S3_PUBLISH_CLOUDFRONT_DOMAIN  variable  domain fronting that bucket, used
+#                                           to verify the upload is actually
+#                                           reachable (e.g. d1veq6e8nuk2fy.cloudfront.net)
 #
 # The role's permission policy needs nke-packages/nkectl/* added -- see
 # artifacts.md section 19 for the exact IAM diff. Until that widening lands,
@@ -49,6 +52,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      security-events: write  # the malware scan uploads SARIF
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,6 +75,7 @@ jobs:
           S3_URI: ${{ vars.S3_PUBLISH_S3_URI }}
           ROLE_ARN: ${{ vars.S3_PUBLISH_AWS_ROLE_ARN }}
           REGION: ${{ vars.S3_PUBLISH_AWS_REGION }}
+          CF_DOMAIN: ${{ vars.S3_PUBLISH_CLOUDFRONT_DOMAIN }}
         run: |
           set -euo pipefail
           if [[ -z "${S3_URI}" ]]; then
@@ -79,6 +84,10 @@ jobs:
           fi
           if [[ -z "${ROLE_ARN}" ]]; then
             echo "::error::S3_PUBLISH_AWS_ROLE_ARN is not set in the s3-publish environment"
+            exit 1
+          fi
+          if [[ -z "${CF_DOMAIN}" ]]; then
+            echo "::error::S3_PUBLISH_CLOUDFRONT_DOMAIN is not set in the s3-publish environment"
             exit 1
           fi
 
@@ -90,6 +99,7 @@ jobs:
             echo "role_arn=${ROLE_ARN}"
             echo "region=${REGION:-us-west-2}"
             echo "release=${release}"
+            echo "cf_domain=${CF_DOMAIN}"
           } >> "${GITHUB_OUTPUT}"
           echo "Publishing nkectl release ${release} to ${S3_URI}"
 
@@ -121,10 +131,19 @@ jobs:
               ./scripts/upload-s3-flat.sh "dist/nkectl-${platform}"
           done
 
-      - name: Show CloudFront URL for one platform
+      - name: Verify CloudFront reachability
         shell: bash
         env:
+          CF_DOMAIN: ${{ steps.meta.outputs.cf_domain }}
           RELEASE: ${{ steps.meta.outputs.release }}
         run: |
-          echo "e.g. https://d1veq6e8nuk2fy.cloudfront.net/nke-packages/nkectl/releases/${RELEASE}/linux-amd64/nkectl-linux-amd64"
-          echo "(confirm the actual CloudFront domain matches -- this repeats the one agent's .deb uses, not a hardcoded assumption for nkectl specifically)"
+          set -euo pipefail
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            url="https://${CF_DOMAIN}/nke-packages/nkectl/releases/${RELEASE}/${platform}/nkectl-${platform}"
+            status="$(curl -s -o /dev/null -w '%{http_code}' -I "${url}")"
+            if [[ "${status}" != "200" ]]; then
+              echo "::error::${url} returned ${status}, not 200"
+              exit 1
+            fi
+            echo "OK ${url}"
+          done

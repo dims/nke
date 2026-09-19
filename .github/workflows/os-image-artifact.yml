@@ -546,9 +546,10 @@ jobs:
   # `environment:` gate would apply to the whole job, not just the push
   # step. Pulls the qcow2 just pushed to GHCR instead of rebuilding it.
   publish-nvcr:
-    needs: publish
+    needs: [matrix, publish]
     if: >-
       github.repository == 'dsx-ai-factory/nke' &&
+      github.event.inputs.dry_run != 'true' &&
       (startsWith(github.ref, 'refs/tags/os-image/') ||
        github.event_name == 'workflow_dispatch')
     name: Publish to NVCR (${{ matrix.arch }})
@@ -602,10 +603,11 @@ jobs:
       - name: Log in to GHCR (pull) and NVCR (push)
         shell: bash
         env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NGC_TOKEN: ${{ secrets.NGC_REGISTRY_TOKEN_NKE }}
         run: |
           set -euo pipefail
-          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io \
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
             --username "${{ github.actor }}" --password-stdin
           # shellcheck disable=SC2016
           echo "${NGC_TOKEN}" | oras login nvcr.io \
@@ -629,7 +631,7 @@ jobs:
   # GHCR rather than the runner's local disk, since this job doesn't share a
   # filesystem with the "publish" matrix leg that built it.
   publish-s3:
-    needs: publish
+    needs: [matrix, publish]
     if: >-
       github.repository == 'dsx-ai-factory/nke' &&
       startsWith(github.ref, 'refs/tags/os-image/')
@@ -662,8 +664,12 @@ jobs:
           version: ${{ steps.versions.outputs.oras_version }}
 
       - name: Log in to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io \
+          set -euo pipefail
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
             --username "${{ github.actor }}" --password-stdin
 
       - name: Resolve release and pull qcow2s
@@ -674,10 +680,11 @@ jobs:
           S3_URI: ${{ vars.S3_PUBLISH_S3_URI }}
           ROLE_ARN: ${{ vars.S3_PUBLISH_AWS_ROLE_ARN }}
           REGION: ${{ vars.S3_PUBLISH_AWS_REGION }}
+          CF_DOMAIN: ${{ vars.S3_PUBLISH_CLOUDFRONT_DOMAIN }}
         run: |
           set -euo pipefail
-          if [[ -z "${S3_URI}" || -z "${ROLE_ARN}" ]]; then
-            echo "::error::S3_PUBLISH_S3_URI / S3_PUBLISH_AWS_ROLE_ARN not set in the s3-publish environment"
+          if [[ -z "${S3_URI}" || -z "${ROLE_ARN}" || -z "${CF_DOMAIN}" ]]; then
+            echo "::error::S3_PUBLISH_S3_URI / S3_PUBLISH_AWS_ROLE_ARN / S3_PUBLISH_CLOUDFRONT_DOMAIN not set in the s3-publish environment"
             exit 1
           fi
           release="${GITHUB_REF_NAME#os-image/}"
@@ -692,6 +699,7 @@ jobs:
             echo "role_arn=${ROLE_ARN}"
             echo "region=${REGION:-us-west-2}"
             echo "release=${release}"
+            echo "cf_domain=${CF_DOMAIN}"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Configure AWS credentials
@@ -711,6 +719,25 @@ jobs:
           for f in dist/*.qcow2; do
             S3_PREFIX="os-image/releases/${RELEASE}/${ARCH}" \
               ./scripts/upload-s3-flat.sh "$f"
+          done
+
+      - name: Verify CloudFront reachability
+        shell: bash
+        env:
+          CF_DOMAIN: ${{ steps.meta.outputs.cf_domain }}
+          RELEASE: ${{ steps.meta.outputs.release }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          for f in dist/*.qcow2; do
+            bn="$(basename "$f")"
+            url="https://${CF_DOMAIN}/nke-packages/os-image/releases/${RELEASE}/${ARCH}/${bn}"
+            status="$(curl -s -o /dev/null -w '%{http_code}' -I "${url}")"
+            if [[ "${status}" != "200" ]]; then
+              echo "::error::${url} returned ${status}, not 200"
+              exit 1
+            fi
+            echo "OK ${url}"
           done
 
   release:

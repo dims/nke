@@ -456,6 +456,15 @@ jobs:
             --annotation "org.opencontainers.image.version=${version}" \
             "${version}-amd64" "${version}-arm64"
 
+      - name: Show published index
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPO: ${{ steps.meta.outputs.repo }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#agent/}"
+          oras manifest fetch --pretty "${REPO}:${version}"
+
   # Separate from apt intake so the release job does not need the apt-intake
   # environment or id-token. Runs only on agent/v* tag pushes (not branch
   # workflow_dispatch). make_latest stays false so a component release never

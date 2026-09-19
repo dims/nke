@@ -3,10 +3,11 @@
 
 name: CLI Artifact NVCR
 
-# Publishes nkectl binaries to nvcr.io as OCI artifacts. Mirrors
-# agent-artifact-nvcr.yml but for cli, and cli-artifact.yml but for NVCR
-# instead of GHCR -- for NGC cluster consumers that hold NGC pull credentials
-# but not GHCR credentials.
+# Publishes nkectl binaries to nvcr.io as OCI artifacts -- for NGC cluster
+# consumers that hold NGC pull credentials but not GHCR credentials. Same
+# login/push structure as agent-artifact-nvcr.yml, but tags are OS/ARCH-
+# suffixed only, same as cli-artifact.yml -- no manifest-index step, so
+# there is no bare `:version` tag to pull with `--platform`.
 #
 # The destination is not written here. It is built from the `nvcr`
 # environment, so no registry identifier lands in a tracked file of a
@@ -47,6 +48,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      security-events: write  # the malware scan uploads SARIF
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

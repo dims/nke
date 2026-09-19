@@ -4,10 +4,14 @@
 name: CLI Artifact GHCR
 
 # Publishes nkectl binaries to GHCR as OCI artifacts, alongside the existing
-# GitHub Release. Mirrors agent-artifact.yml's shape for the agent binary.
-# Unlike agent, nkectl also ships darwin builds -- every existing
-# `--artifact-platform` use in this repo is linux-only, so this is the first
-# time that flag sees a `darwin/*` value. Watch the first real run.
+# GitHub Release. Tags are OS/ARCH-suffixed only (e.g. v0.1.0-linux-amd64),
+# same as os-image -- no `oras manifest index create` step, so unlike
+# agent-artifact.yml there is no bare `:version` tag a consumer can pull with
+# `--platform` to auto-select. Pull the suffixed tag directly.
+#
+# nkectl also ships darwin builds -- every existing `--artifact-platform`
+# use in this repo is linux-only, so this is the first time that flag sees a
+# `darwin/*` value. Watch the first real run.
 
 on:
   push:
@@ -33,6 +37,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # the malware scan uploads SARIF
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,11 +99,12 @@ jobs:
           output_file: 'clamav-cli-artifact.sarif'
 
       - name: Log in to GHCR
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0b # v3.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
 
       - name: Push per-platform artifacts
         shell: bash
