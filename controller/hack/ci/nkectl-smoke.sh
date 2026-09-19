@@ -9,8 +9,19 @@
 # commands and their negatives, provider inspection, rejected creates, and one
 # create, list, patch, delete round trip over a cluster and a node pool.
 #
-# Needs from the caller: log, runner_exec, RUNNER_NAME, NKECTL_BIN, TMP_DIR,
-# BACKEND, CAPD_NODE_IMAGE.
+# Needs from the caller: log, NKECTL_BIN, TMP_DIR, BACKEND, CAPD_NODE_IMAGE.
+#
+# Two shapes of lane, selected by NKECTL_SMOKE_RUNNER. Set it to a container
+# name and the CLI runs in there (ci/backend-e2e.sh, which drives kind through
+# a runner). Leave it unset and the CLI runs on this host against
+# NKECTL_SMOKE_KUBECONFIG (ci/nico-vms-e2e.sh, which has no runner). Every
+# exec, copy and file test below branches on it in one place, so no assertion
+# has to care.
+#
+# Deliberately not RUNNER_NAME: GitHub Actions sets that in every job, so
+# "unset means host mode" is never true in CI. backend-e2e.sh overwrites it
+# with its own container name, which hid that until nico-vms tried to docker
+# exec into the Actions runner's hostname.
 
 # The CWE service the suite deploys.
 NKECTL_SMOKE_CWE_NAMESPACE=cloud-workflow-engine
@@ -40,25 +51,67 @@ nkectl_smoke_build() {
 # failure: the job cap's SIGTERM makes handle_signal skip diagnostics.
 NKECTL_SMOKE_TIMEOUT="${NKECTL_SMOKE_TIMEOUT:-60}"
 
+# The site kubeconfig, passed to `config set-site --kubeconfig`. nkectl reads
+# the path out of the site config for token minting, get providers and get
+# kubeconfig; it never falls back to $KUBECONFIG, so this is the only thing
+# that points those three at a cluster. In a runner it is the path the lane
+# mounts; on a host lane the caller points it at kind's own kubeconfig.
+NKECTL_SMOKE_KUBECONFIG="${NKECTL_SMOKE_KUBECONFIG:-/state/management.kubeconfig}"
+
+# Keeps the CLI's own state out of the invoking user's home. config set-site
+# writes $XDG_CONFIG_HOME/nkectl/config.yaml and token minting caches under
+# $XDG_CACHE_HOME, so a host lane would otherwise overwrite a developer's real
+# nkectl config and leave a live token behind.
+#
+# A function, not a variable: this file is sourced before the caller sets
+# TMP_DIR, and reading it at source time aborts under `set -u`.
+nkectl_smoke_home() {
+  echo "${TMP_DIR}/nkectl-home"
+}
+
 nkectl_smoke_stage() {
-  timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp "${NKECTL_BIN}" "${RUNNER_NAME}:/usr/local/bin/nkectl"
+  [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]] || return 0
+  timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp "${NKECTL_BIN}" "${NKECTL_SMOKE_RUNNER}:/usr/local/bin/nkectl"
 }
 
 nkectl_exec() {
-  timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec \
-    -e KUBECONFIG=/state/management.kubeconfig \
-    "${RUNNER_NAME}" nkectl "$@"
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec \
+      -e KUBECONFIG="${NKECTL_SMOKE_KUBECONFIG}" \
+      "${NKECTL_SMOKE_RUNNER}" nkectl "$@"
+  else
+    XDG_CONFIG_HOME="$(nkectl_smoke_home)" XDG_CACHE_HOME="$(nkectl_smoke_home)" \
+      timeout "${NKECTL_SMOKE_TIMEOUT}" "${NKECTL_BIN}" "$@"
+  fi
 }
 
 nkectl_no_auth_exec() {
-  timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec \
-    -e XDG_CONFIG_HOME=/tmp/nkectl-no-auth \
-    "${RUNNER_NAME}" nkectl "$@"
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec \
+      -e XDG_CONFIG_HOME=/tmp/nkectl-no-auth \
+      "${NKECTL_SMOKE_RUNNER}" nkectl "$@"
+  else
+    XDG_CONFIG_HOME="${TMP_DIR}/nkectl-no-auth" XDG_CACHE_HOME="$(nkectl_smoke_home)" \
+      timeout "${NKECTL_SMOKE_TIMEOUT}" "${NKECTL_BIN}" "$@"
+  fi
 }
 
-# `test` in the runner, for asserting on files nkectl did or did not write.
+# `test`, for asserting on files nkectl did or did not write.
 nkectl_smoke_runner_test() {
-  timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec "${RUNNER_NAME}" test "$@"
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec "${NKECTL_SMOKE_RUNNER}" test "$@"
+  else
+    test "$@"
+  fi
+}
+
+# mkdir, wherever the CLI is going to read it from.
+nkectl_smoke_mkdir() {
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec "${NKECTL_SMOKE_RUNNER}" mkdir -p "$1"
+  else
+    mkdir -p "$1"
+  fi
 }
 
 # Port-forward rather than the apiserver service proxy: the proxy does not
@@ -71,13 +124,17 @@ nkectl_smoke_runner_test() {
 nkectl_smoke() {
   local no_auth_config out rc
 
-  docker exec -d -e KUBECONFIG=/state/management.kubeconfig "${RUNNER_NAME}" \
-    kubectl -n "${NKECTL_SMOKE_CWE_NAMESPACE}" port-forward \
-    "svc/${NKECTL_SMOKE_CWE_SERVICE}" "${NKECTL_SMOKE_CWE_PORT}:${NKECTL_SMOKE_CWE_PORT}"
+  # Only the runner lanes need this. A host lane already has CWE on
+  # localhost:${NKECTL_SMOKE_CWE_PORT}, forwarded by Tilt for the whole run.
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    docker exec -d -e KUBECONFIG="${NKECTL_SMOKE_KUBECONFIG}" "${NKECTL_SMOKE_RUNNER}" \
+      kubectl -n "${NKECTL_SMOKE_CWE_NAMESPACE}" port-forward \
+      "svc/${NKECTL_SMOKE_CWE_SERVICE}" "${NKECTL_SMOKE_CWE_PORT}:${NKECTL_SMOKE_CWE_PORT}"
+  fi
 
   nkectl_exec config set-site --name e2e \
     --url "http://127.0.0.1:${NKECTL_SMOKE_CWE_PORT}" \
-    --kubeconfig /state/management.kubeconfig >/dev/null
+    --kubeconfig "${NKECTL_SMOKE_KUBECONFIG}" >/dev/null
 
   # A separate site with no kubeconfig exercises the no-credential path. The
   # normal site above exercises token minting through the management cluster.
@@ -89,10 +146,14 @@ sites:
     kubeconfig: ""
 current-site: e2e
 EOF
-  timeout "${NKECTL_SMOKE_TIMEOUT}" docker exec "${RUNNER_NAME}" \
-    mkdir -p /tmp/nkectl-no-auth/nkectl
-  timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp "${no_auth_config}" \
-    "${RUNNER_NAME}:/tmp/nkectl-no-auth/nkectl/config.yaml" >/dev/null
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    nkectl_smoke_mkdir /tmp/nkectl-no-auth/nkectl
+    timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp "${no_auth_config}" \
+      "${NKECTL_SMOKE_RUNNER}:/tmp/nkectl-no-auth/nkectl/config.yaml" >/dev/null
+  else
+    nkectl_smoke_mkdir "${TMP_DIR}/nkectl-no-auth/nkectl"
+    cp "${no_auth_config}" "${TMP_DIR}/nkectl-no-auth/nkectl/config.yaml"
+  fi
 
   # Doubles as the readiness wait for the forward.
   rc=1
@@ -194,7 +255,7 @@ EOF
   nkectl_smoke_create_rejections || return 1
   nkectl_smoke_write_round_trip || return 1
 
-  log "PASS: nkectl reached CWE, authenticated, listed clusters and node pools, read providers, fetched a kubeconfig, and had malformed creates rejected"
+  log "PASS: nkectl reached CWE, authenticated, listed clusters and node pools, read providers, resolved a kubeconfig request, and had malformed creates rejected"
 }
 
 # version and config: every command that needs no CWE. They are the first two
@@ -301,11 +362,11 @@ nkectl_smoke_kubeconfig_negatives() {
   # user-flow.md step 8 documents --output-file. A failed fetch must not leave
   # a file behind for a later step to read as a kubeconfig.
   if out="$(nkectl_exec get kubeconfig "${NKECTL_SMOKE_ABSENT}" \
-    --output-file /tmp/nkectl-smoke-kubeconfig 2>&1)"; then
+    --output-file "$(nkectl_smoke_spec_path kubeconfig)" 2>&1)"; then
     log "nkectl smoke: 'get kubeconfig --output-file' succeeded for an absent cluster" >&2
     return 1
   fi
-  if nkectl_smoke_runner_test -e /tmp/nkectl-smoke-kubeconfig; then
+  if nkectl_smoke_runner_test -e "$(nkectl_smoke_spec_path kubeconfig)"; then
     log "nkectl smoke: 'get kubeconfig --output-file' wrote a file despite failing" >&2
     return 1
   fi
@@ -437,7 +498,11 @@ nkectl_smoke_providers() {
 
 # Where a staged spec lands in the runner container.
 nkectl_smoke_spec_path() {
-  echo "/tmp/nkectl-smoke-$1.yaml"
+  if [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]]; then
+    echo "/tmp/nkectl-smoke-$1.yaml"
+  else
+    echo "${TMP_DIR}/nkectl-smoke-$1.yaml"
+  fi
 }
 
 # Stage the YAML on stdin into the runner. nkectl_exec has no -i, so
@@ -446,8 +511,10 @@ nkectl_smoke_stage_spec() {
   local name="$1"
   local host_path="${TMP_DIR}/nkectl-smoke-${name}.yaml"
   cat >"${host_path}" || return 1
+  # On a host lane the spec is already where the CLI will read it.
+  [[ -n "${NKECTL_SMOKE_RUNNER:-}" ]] || return 0
   timeout "${NKECTL_SMOKE_TIMEOUT}" docker cp \
-    "${host_path}" "${RUNNER_NAME}:$(nkectl_smoke_spec_path "${name}")" >/dev/null
+    "${host_path}" "${NKECTL_SMOKE_RUNNER}:$(nkectl_smoke_spec_path "${name}")" >/dev/null
 }
 
 # Bodies the OpenAPI validator rejects before any handler runs: no row, no
@@ -523,7 +590,7 @@ nkectl_smoke_write_round_trip() {
     return 0
   fi
   # CAPD only because no NicoCluster spec has been written for the smoke yet.
-  # The seed IDs are constants (tenant_test.go:971), not a plumbing problem.
+  # The seed IDs are constants (nicoSiteID in tenant_test.go), not plumbing.
   if [[ "${BACKEND:-}" != "capd" ]]; then
     log "nkectl smoke: SKIP the write round trip on the ${BACKEND:-unset} backend"
     return 0
