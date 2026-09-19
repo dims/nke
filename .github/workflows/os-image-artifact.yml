@@ -634,6 +634,7 @@ jobs:
     needs: [matrix, publish]
     if: >-
       github.repository == 'dsx-ai-factory/nke' &&
+      github.event.inputs.dry_run != 'true' &&
       startsWith(github.ref, 'refs/tags/os-image/')
     name: Publish to S3 (${{ matrix.arch }})
     runs-on: ubuntu-latest
