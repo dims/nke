@@ -12,8 +12,8 @@
 # this into another lane would slow every job there for setup none of them use.
 #
 # Called from merge-gate.yml and listed in the gate's `needs`, so a red run
-# blocks a merge. The arm64 leg is the gate's slowest job, 10m14s against
-# 7m09s for amd64, so it sets the critical path.
+# blocks a merge. Both legs run about ten minutes, close enough to the gate's
+# other long jobs that either can set the critical path.
 #
 # It is the only gate member that needs a database, and the only one that runs a
 # built binary rather than a package, so it is the most likely to fail for
@@ -167,7 +167,9 @@ jobs:
       # where forks have no token. github.event_name is the caller's event, so
       # this is skipped when merge-gate.yml calls this workflow.
       - name: Verify the CAPNICo CRD fixture is current
-        if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+        # amd64 only: the fixture is architecture-independent, so the second
+        # leg would just double the gh api calls and the chance of a flake.
+        if: matrix.arch == 'amd64' && github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
         env:
           GH_TOKEN: ${{ secrets.NKE_INTERNAL_RO_TOKEN }}
         run: |

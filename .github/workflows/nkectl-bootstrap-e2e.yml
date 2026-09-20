@@ -65,7 +65,8 @@ jobs:
     # The bootstrap cluster and three nested control planes need the 16-CPU
     # pool; pull requests reach it through the mirror branch. Neither leg needs
     # /dev/kvm. Both stay on the fleet for NKECTL_CWE_POSTGRES_CHART below:
-    # cwedeploy.go:426-429 defaults it only when empty, so it has no fallback.
+    # cwedeploy Engine.Deploy defaults it only when empty, so it has no
+    # fallback.
     runs-on: ${{ matrix.runner }}
     if: github.repository == 'dsx-ai-factory/nke'
     strategy:
