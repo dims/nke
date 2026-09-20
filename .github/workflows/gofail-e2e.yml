@@ -12,9 +12,8 @@
 # this into another lane would slow every job there for setup none of them use.
 #
 # Called from merge-gate.yml and listed in the gate's `needs`, so a red run
-# blocks a merge. It takes about six minutes against a gate whose wall clock is
-# about nine, set by golangci-lint (controller), so it does not extend the
-# critical path.
+# blocks a merge. The arm64 leg is the gate's slowest job, 10m14s against
+# 7m09s for amd64, so it sets the critical path.
 #
 # It is the only gate member that needs a database, and the only one that runs a
 # built binary rather than a package, so it is the most likely to fail for
@@ -65,8 +64,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Both hosted. This lane needs no internal mirror and no token, so it
-          # runs on a fork; deb.yml already builds on ubuntu-24.04-arm.
+          # Both hosted: no internal mirror, no secret. deb.yml already builds
+          # on ubuntu-24.04-arm.
           - arch: amd64
             runner: ubuntu-latest
           - arch: arm64
@@ -117,10 +116,11 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: gofail-go-${{ runner.os }}-${{ hashFiles('go.work.sum', '**/go.sum') }}-${{ github.run_id }}
+          # runner.arch too: runner.os is Linux on both legs.
+          key: gofail-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.work.sum', '**/go.sum') }}-${{ github.run_id }}
           restore-keys: |
-            gofail-go-${{ runner.os }}-${{ hashFiles('go.work.sum', '**/go.sum') }}-
-            gofail-go-${{ runner.os }}-
+            gofail-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.work.sum', '**/go.sum') }}-
+            gofail-go-${{ runner.os }}-${{ runner.arch }}-
 
       # 160 MB of etcd, kube-apiserver and kubectl. The Makefile pins the store
       # to controller/.go/envtest with --bin-dir, so this path is exact rather
@@ -130,8 +130,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: controller/.go/envtest
-          key: envtest-${{ runner.os }}-${{ hashFiles('controller/Makefile') }}
-          restore-keys: envtest-${{ runner.os }}-
+          key: envtest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('controller/Makefile') }}
+          restore-keys: envtest-${{ runner.os }}-${{ runner.arch }}-
 
       # The runner image already ships PostgreSQL, so start that rather than
       # pull a service container. Same approach as NVIDIA/infra-controller.

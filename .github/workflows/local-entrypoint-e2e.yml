@@ -201,7 +201,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: local-entrypoint-e2e-cni-${{ matrix.install_cni_after_init }}-${{ github.run_id }}-${{ github.run_attempt }}
+          # The arch too: GitHub keeps two same-named artifacts.
+          name: local-entrypoint-e2e-${{ matrix.arch }}-cni-${{ matrix.install_cni_after_init }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: controller/.local/backend-e2e/
           if-no-files-found: ignore
           retention-days: 7
