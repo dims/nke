@@ -58,9 +58,19 @@ concurrency:
 
 jobs:
   gofail:
-    name: Gofail E2E
-    runs-on: ubuntu-latest
+    name: Gofail E2E (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     if: github.repository == 'dsx-ai-factory/nke'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Both hosted. This lane needs no internal mirror and no token, so it
+          # runs on a fork; deb.yml already builds on ubuntu-24.04-arm.
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     # The two scenarios took 158s and 188s when measured, and both wait on real
     # heartbeat timeouts, so the budget is deliberately loose.
     timeout-minutes: 25
