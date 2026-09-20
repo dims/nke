@@ -10,9 +10,9 @@ name: CLI S3 Publish
 # writes an apt-publisher index.json; nkectl is neither a .deb nor
 # apt-consumed).
 #
-# Needs a new `s3-publish` GitHub Environment (Settings -> Environments),
-# not a reuse of `apt-intake` -- that name and scope are conceptually
-# apt-specific. Required environment vars:
+# Uses the `s3-publish` GitHub Environment (Settings -> Environments), not a
+# reuse of `apt-intake` -- that name and scope are conceptually apt-specific.
+# Environment vars (all set, IAM widened -- see artifacts.md section 19):
 #
 #   S3_PUBLISH_S3_URI             variable  e.g. s3://nke-prod-assets/nke-packages
 #   S3_PUBLISH_AWS_ROLE_ARN       variable  role ARN with write access to the
@@ -21,11 +21,6 @@ name: CLI S3 Publish
 #   S3_PUBLISH_CLOUDFRONT_DOMAIN  variable  domain fronting that bucket, used
 #                                           to verify the upload is actually
 #                                           reachable (e.g. d1veq6e8nuk2fy.cloudfront.net)
-#
-# The role's permission policy needs nke-packages/nkectl/* added -- see
-# artifacts.md section 19 for the exact IAM diff. Until that widening lands,
-# this workflow will fail at the upload step with an access-denied error, not
-# silently do nothing.
 
 on:
   push:
