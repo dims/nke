@@ -4,11 +4,11 @@ go 1.26.6
 
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
-	github.com/dsx-ai-factory/nke/agent v0.0.0-00010101000000-000000000000
-	github.com/dsx-ai-factory/nke/controller/api v0.0.0-00010101000000-000000000000
 	github.com/blang/semver/v4 v4.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/dsx-ai-factory/cluster-api-provider-nico v0.0.45
+	github.com/dsx-ai-factory/nke/agent v0.0.0-00010101000000-000000000000
+	github.com/dsx-ai-factory/nke/controller/api v0.0.0-00010101000000-000000000000
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-jose/go-jose/v4 v4.1.5
