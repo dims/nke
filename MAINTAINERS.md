@@ -53,13 +53,9 @@ somewhere obvious to go.
 The project lead is responsible for final tie-breaking decisions and
 strategic direction. Contact via a GitHub issue or discussion.
 
-**Not yet assigned.** GOVERNANCE.md gives this role the tie-break vote, so
-an empty seat leaves that path unresolved. It needs a person rather than a
-team handle, because a team cannot break a tie.
-
-| GitHub handle | Affiliation |
-|---|---|
-| *(unassigned)* | |
+| GitHub handle | Name | Affiliation |
+|---|---|---|
+| @newtonkishore-nv | Kishore Karthikeyan | NVIDIA |
 
 ## Emeritus maintainers
 
