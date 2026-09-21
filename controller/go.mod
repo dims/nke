@@ -165,7 +165,7 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/grpc v1.84.0
+	google.golang.org/grpc v1.83.2
 	k8s.io/api v0.37.0
 	k8s.io/client-go v0.37.0
 	mellium.im/sasl v0.3.2 // indirect
