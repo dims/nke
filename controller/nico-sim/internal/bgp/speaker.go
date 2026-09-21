@@ -13,12 +13,13 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sort"
 	"sync"
 	"syscall"
 	"time"
 
-	bgpmsg "github.com/osrg/gobgp/v3/pkg/packet/bgp"
+	bgpmsg "github.com/osrg/gobgp/v4/pkg/packet/bgp"
 	"github.com/vishvananda/netlink"
 )
 
@@ -272,10 +273,17 @@ func (s *Speaker) handlePeer(ctx context.Context, conn net.Conn) {
 	if s.cfg.LocalASN > 65535 {
 		myAS = bgpmsg.AS_TRANS
 	}
-	ourOpen := bgpmsg.NewBGPOpenMessage(
+	// gobgp v4 takes the router ID as a netip.Addr and returns an error, where
+	// v3 took a string and could not fail.
+	routerAddr, err := netip.ParseAddr(routerID)
+	if err != nil {
+		s.logger.Warn("BGP invalid router ID", "peer", peerAddr, "routerID", routerID, "error", err)
+		return
+	}
+	ourOpen, err := bgpmsg.NewBGPOpenMessage(
 		myAS, // MyAS (AS_TRANS for 4-byte ASNs; real ASN in the capability)
 		s.cfg.HoldTime,
-		routerID,
+		routerAddr,
 		[]bgpmsg.OptionParameterInterface{
 			bgpmsg.NewOptionParameterCapability([]bgpmsg.ParameterCapabilityInterface{
 				bgpmsg.NewCapFourOctetASNumber(s.cfg.LocalASN),
@@ -283,6 +291,10 @@ func (s *Speaker) handlePeer(ctx context.Context, conn net.Conn) {
 			}),
 		},
 	)
+	if err != nil {
+		s.logger.Warn("BGP failed to build OPEN", "peer", peerAddr, "error", err)
+		return
+	}
 	if err := writeBGPMessage(conn, ourOpen); err != nil {
 		s.logger.Warn("BGP failed to send OPEN", "peer", peerAddr, "error", err)
 		return
@@ -337,6 +349,18 @@ func (s *Speaker) handlePeer(ctx context.Context, conn net.Conn) {
 	}
 }
 
+// ipv4Prefix extracts the address and prefix length from an IPv4 unicast NLRI.
+// gobgp v4 carries each route as a PathNLRI holding an NLRI interface, where v3
+// exposed the prefix and length as fields. Any other address family is skipped:
+// this speaker only advertises IPv4 unicast in its OPEN.
+func ipv4Prefix(path bgpmsg.PathNLRI) (net.IP, int, bool) {
+	p, ok := path.NLRI.(*bgpmsg.IPAddrPrefix)
+	if !ok || !p.Prefix.IsValid() || !p.Prefix.Addr().Is4() {
+		return nil, 0, false
+	}
+	return net.IP(p.Prefix.Addr().AsSlice()), p.Prefix.Bits(), true
+}
+
 // processUpdate extracts /32 prefixes and nexthops from a BGP UPDATE message.
 // The nexthop is always the peer's TCP source address, not the BGP NEXT_HOP
 // attribute. In the nico-vms topology these are always the same (kube-vip
@@ -348,9 +372,12 @@ func (s *Speaker) processUpdate(peerAddr string, update *bgpmsg.BGPUpdate) {
 
 	// Process withdrawn routes.
 	for _, withdrawn := range update.WithdrawnRoutes {
-		prefix := withdrawn.Prefix.String()
-		prefixLen := int(withdrawn.Length)
-		if !s.isAllowedRoute(withdrawn.Prefix, prefixLen) {
+		addr, prefixLen, ok := ipv4Prefix(withdrawn)
+		if !ok {
+			continue
+		}
+		prefix := addr.String()
+		if !s.isAllowedRoute(addr, prefixLen) {
 			continue
 		}
 		s.mu.Lock()
@@ -367,9 +394,12 @@ func (s *Speaker) processUpdate(peerAddr string, update *bgpmsg.BGPUpdate) {
 
 	// Process NLRI (announced routes).
 	for _, nlri := range update.NLRI {
-		prefix := nlri.Prefix.String()
-		prefixLen := int(nlri.Length)
-		if !s.isAllowedRoute(nlri.Prefix, prefixLen) {
+		addr, prefixLen, ok := ipv4Prefix(nlri)
+		if !ok {
+			continue
+		}
+		prefix := addr.String()
+		if !s.isAllowedRoute(addr, prefixLen) {
 			s.logger.Error("BGP ignoring disallowed route",
 				"peer", peerAddr, "prefix", prefix, "prefixLen", prefixLen)
 			continue

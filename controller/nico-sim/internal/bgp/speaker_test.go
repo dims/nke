@@ -7,13 +7,14 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
-	bgpmsg "github.com/osrg/gobgp/v3/pkg/packet/bgp"
+	bgpmsg "github.com/osrg/gobgp/v4/pkg/packet/bgp"
 	"github.com/vishvananda/netlink"
 )
 
@@ -110,31 +111,52 @@ func newTestSpeakerDirect(rm *mockRouteManager, extraCfg ...func(*Config)) *Spea
 	return NewWithRouteManager(cfg, logger, rm)
 }
 
+// roundTrip serializes a message and parses it back, so the builders below hand
+// processUpdate exactly what the decoder produces on the wire rather than the
+// structs the constructors return.
+func roundTrip(msg *bgpmsg.BGPMessage) *bgpmsg.BGPUpdate {
+	buf, err := msg.Serialize()
+	if err != nil {
+		panic(err)
+	}
+	parsed, err := bgpmsg.ParseBGPMessage(buf)
+	if err != nil {
+		panic(err)
+	}
+	return parsed.Body.(*bgpmsg.BGPUpdate)
+}
+
+// mustNLRI builds the NLRI list for one prefix. The inputs are test literals,
+// so a parse failure is a bug in the test, not a case to handle.
+func mustNLRI(vip string, prefixLen uint8) []bgpmsg.PathNLRI {
+	prefix, err := bgpmsg.NewIPAddrPrefix(netip.PrefixFrom(netip.MustParseAddr(vip), int(prefixLen)))
+	if err != nil {
+		panic(err)
+	}
+	return []bgpmsg.PathNLRI{{NLRI: prefix}}
+}
+
 // buildUpdate constructs a BGP UPDATE with the given NLRI/nexthop.
 func buildUpdate(vip, nexthop string, prefixLen uint8) *bgpmsg.BGPUpdate {
+	nextHopAttr, err := bgpmsg.NewPathAttributeNextHop(netip.MustParseAddr(nexthop))
+	if err != nil {
+		panic(err)
+	}
 	msg := bgpmsg.NewBGPUpdateMessage(
 		nil,
 		[]bgpmsg.PathAttributeInterface{
 			bgpmsg.NewPathAttributeOrigin(bgpmsg.BGP_ORIGIN_ATTR_TYPE_IGP),
-			bgpmsg.NewPathAttributeNextHop(nexthop),
+			nextHopAttr,
 		},
-		[]*bgpmsg.IPAddrPrefix{
-			bgpmsg.NewIPAddrPrefix(prefixLen, vip),
-		},
+		mustNLRI(vip, prefixLen),
 	)
-	return msg.Body.(*bgpmsg.BGPUpdate)
+	return roundTrip(msg)
 }
 
 // buildWithdraw constructs a BGP UPDATE withdrawing the given prefix.
 func buildWithdraw(vip string, prefixLen uint8) *bgpmsg.BGPUpdate {
-	msg := bgpmsg.NewBGPUpdateMessage(
-		[]*bgpmsg.IPAddrPrefix{
-			bgpmsg.NewIPAddrPrefix(prefixLen, vip),
-		},
-		nil,
-		nil,
-	)
-	return msg.Body.(*bgpmsg.BGPUpdate)
+	msg := bgpmsg.NewBGPUpdateMessage(mustNLRI(vip, prefixLen), nil, nil)
+	return roundTrip(msg)
 }
 
 // ── Direct processUpdate / handlePeerDown tests (no TCP needed) ──────────────
@@ -498,10 +520,10 @@ func connectPeer(t *testing.T, addr net.Addr, peerASN uint32) net.Conn {
 		t.Fatalf("dial speaker: %v", err)
 	}
 
-	open := bgpmsg.NewBGPOpenMessage(
+	open, err := bgpmsg.NewBGPOpenMessage(
 		uint16(min(peerASN, 65535)),
 		9,
-		"1.2.3.4",
+		netip.MustParseAddr("1.2.3.4"),
 		[]bgpmsg.OptionParameterInterface{
 			bgpmsg.NewOptionParameterCapability([]bgpmsg.ParameterCapabilityInterface{
 				bgpmsg.NewCapFourOctetASNumber(peerASN),
@@ -509,6 +531,9 @@ func connectPeer(t *testing.T, addr net.Addr, peerASN uint32) net.Conn {
 			}),
 		},
 	)
+	if err != nil {
+		t.Fatalf("build OPEN: %v", err)
+	}
 	if err := writeBGPMessage(conn, open); err != nil {
 		t.Fatalf("write OPEN: %v", err)
 	}
@@ -598,16 +623,19 @@ func TestSpeaker_WrongASNRejected(t *testing.T) {
 
 	// Send OPEN with wrong ASN.
 	wrongASN := uint32(99999)
-	open := bgpmsg.NewBGPOpenMessage(
+	open, err := bgpmsg.NewBGPOpenMessage(
 		uint16(min(wrongASN, 65535)),
 		9,
-		"1.2.3.4",
+		netip.MustParseAddr("1.2.3.4"),
 		[]bgpmsg.OptionParameterInterface{
 			bgpmsg.NewOptionParameterCapability([]bgpmsg.ParameterCapabilityInterface{
 				bgpmsg.NewCapFourOctetASNumber(wrongASN),
 			}),
 		},
 	)
+	if err != nil {
+		t.Fatalf("build OPEN: %v", err)
+	}
 	if err := writeBGPMessage(conn, open); err != nil {
 		t.Fatalf("write OPEN: %v", err)
 	}
