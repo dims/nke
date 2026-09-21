@@ -73,6 +73,15 @@ sed -e "s|@ROUTER_ID@|${KIND_GW}|g" \
     -e "s|@LISTEN_RANGE@|${KIND_SUBNET}|g" \
     "${HERE}/frr.conf.tmpl" > "${RENDERED_CONF}"
 
+# Pull explicitly, with retries. `docker create` pulls implicitly and gives up
+# on the first error, so a registry 502 fails both legs of the lane at once.
+for attempt in 1 2 3; do
+  docker pull "${FRR_IMAGE}" >/dev/null 2>&1 && break
+  ((attempt < 3)) || die "pulling ${FRR_IMAGE} failed"
+  info "pulling ${FRR_IMAGE} failed (attempt ${attempt}/3), retrying in $((attempt * 15))s"
+  sleep $((attempt * 15))
+done
+
 info "Starting FRR in host network mode (routes install on colima/host kernel)..."
 docker create \
   --name "${CONTAINER_NAME}" \
