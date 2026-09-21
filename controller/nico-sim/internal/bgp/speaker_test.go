@@ -512,24 +512,24 @@ func newTCPSpeaker(t *testing.T, rm *mockRouteManager, extraCfg ...func(*Config)
 	return s, addr, cancelFn
 }
 
-// connectPeer dials the speaker and completes the BGP OPEN handshake.
-func connectPeer(t *testing.T, addr net.Addr, peerASN uint32) net.Conn {
+// connectPeer dials the speaker and completes the BGP OPEN handshake. as4Cap
+// controls whether the OPEN advertises the 4-octet-AS capability (RFC 6793).
+func connectPeer(t *testing.T, addr net.Addr, peerASN uint32, as4Cap bool) net.Conn {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp", addr.String(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("dial speaker: %v", err)
 	}
 
+	caps := []bgpmsg.ParameterCapabilityInterface{bgpmsg.NewCapMultiProtocol(bgpmsg.RF_IPv4_UC)}
+	if as4Cap {
+		caps = append(caps, bgpmsg.NewCapFourOctetASNumber(peerASN))
+	}
 	open, err := bgpmsg.NewBGPOpenMessage(
 		uint16(min(peerASN, 65535)),
 		9,
 		netip.MustParseAddr("1.2.3.4"),
-		[]bgpmsg.OptionParameterInterface{
-			bgpmsg.NewOptionParameterCapability([]bgpmsg.ParameterCapabilityInterface{
-				bgpmsg.NewCapFourOctetASNumber(peerASN),
-				bgpmsg.NewCapMultiProtocol(bgpmsg.RF_IPv4_UC),
-			}),
-		},
+		[]bgpmsg.OptionParameterInterface{bgpmsg.NewOptionParameterCapability(caps)},
 	)
 	if err != nil {
 		t.Fatalf("build OPEN: %v", err)
@@ -581,7 +581,7 @@ func TestSpeaker_HoldTimerExpiryClosesConnection(t *testing.T) {
 	_, addr, cancel := newTCPSpeaker(t, rm)
 	defer cancel()
 
-	conn := connectPeer(t, addr, testPeerASN)
+	conn := connectPeer(t, addr, testPeerASN, true)
 	defer conn.Close()
 
 	// Stop sending keepalives — speaker hold timer (2s) should expire.
@@ -650,5 +650,61 @@ func TestSpeaker_WrongASNRejected(t *testing.T) {
 
 	if rm.callCount() != 0 {
 		t.Errorf("expected no route calls for wrong ASN peer, got %d", rm.callCount())
+	}
+}
+
+// Test 13: gobgp v4 no longer sniffs the AS_PATH width from the bytes, so the
+// speaker must parse with the width the peer negotiated in its OPEN.
+func TestSpeaker_ASPathWidthFollowsPeerCapability(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		as4Cap bool
+		asPath bgpmsg.AsPathParamInterface
+	}{
+		{"2-byte AS peer without AS4 capability", false, bgpmsg.NewAsPathParam(bgpmsg.BGP_ASPATH_ATTR_TYPE_SEQ, []uint16{uint16(testPeerASN)})},
+		{"4-byte AS peer with AS4 capability", true, bgpmsg.NewAs4PathParam(bgpmsg.BGP_ASPATH_ATTR_TYPE_SEQ, []uint32{testPeerASN})},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rm := newMockRM()
+			_, addr, cancel := newTCPSpeaker(t, rm)
+			defer cancel()
+
+			conn := connectPeer(t, addr, testPeerASN, tc.as4Cap)
+			defer conn.Close()
+
+			nextHop, err := bgpmsg.NewPathAttributeNextHop(netip.MustParseAddr("127.0.0.1"))
+			if err != nil {
+				t.Fatalf("build NEXT_HOP: %v", err)
+			}
+			update := bgpmsg.NewBGPUpdateMessage(
+				nil,
+				[]bgpmsg.PathAttributeInterface{
+					bgpmsg.NewPathAttributeOrigin(bgpmsg.BGP_ORIGIN_ATTR_TYPE_IGP),
+					bgpmsg.NewPathAttributeAsPath([]bgpmsg.AsPathParamInterface{tc.asPath}),
+					nextHop,
+				},
+				mustNLRI(testVIP, 32),
+			)
+			if err := writeBGPMessage(conn, update); err != nil {
+				t.Fatalf("write UPDATE: %v", err)
+			}
+
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				if call, ok := rm.lastCall(); ok {
+					if call.op != "replace" || call.dst != testVIP {
+						t.Fatalf("want replace %s, got %s %s", testVIP, call.op, call.dst)
+					}
+					return
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			t.Fatal("route not installed: the speaker did not accept the UPDATE")
+		})
 	}
 }

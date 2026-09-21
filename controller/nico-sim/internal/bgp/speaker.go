@@ -243,11 +243,13 @@ func (s *Speaker) handlePeer(ctx context.Context, conn net.Conn) {
 	// Validate peer ASN. BGP4 uses MyAS (uint16), but for 4-byte ASN support,
 	// the peer sets MyAS=AS_TRANS (23456) and sends the real ASN in a capability.
 	peerASN := uint32(openMsg.MyAS)
+	peerHasAS4 := false
 	for _, param := range openMsg.OptParams {
 		if paramCap, ok := param.(*bgpmsg.OptionParameterCapability); ok {
 			for _, cap := range paramCap.Capability {
 				if as4Cap, ok := cap.(*bgpmsg.CapFourOctetASNumber); ok {
 					peerASN = as4Cap.CapValue
+					peerHasAS4 = true
 				}
 			}
 		}
@@ -310,6 +312,9 @@ func (s *Speaker) handlePeer(ctx context.Context, conn net.Conn) {
 
 	// Phase 3: ESTABLISHED loop — process UPDATE and KEEPALIVE messages.
 	holdDuration := time.Duration(s.cfg.HoldTime) * time.Second
+	// gobgp v4 no longer detects the AS_PATH width from the bytes: it assumes
+	// 4-byte ASNs unless told the peer did not negotiate them (RFC 6793).
+	parseOpt := &bgpmsg.MarshallingOption{Use2ByteAS: !peerHasAS4}
 	for {
 		select {
 		case <-ctx.Done():
@@ -317,7 +322,7 @@ func (s *Speaker) handlePeer(ctx context.Context, conn net.Conn) {
 		default:
 		}
 
-		msg, err := readBGPMessage(conn, holdDuration)
+		msg, err := readBGPMessage(conn, holdDuration, parseOpt)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
@@ -558,7 +563,7 @@ func (s *Speaker) isAllowedRoute(prefix net.IP, prefixLen int) bool {
 }
 
 // readBGPMessage reads a single BGP message from the connection with a deadline.
-func readBGPMessage(conn net.Conn, timeout time.Duration) (*bgpmsg.BGPMessage, error) {
+func readBGPMessage(conn net.Conn, timeout time.Duration, opts ...*bgpmsg.MarshallingOption) (*bgpmsg.BGPMessage, error) {
 	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, fmt.Errorf("set read deadline: %w", err)
 	}
@@ -589,7 +594,7 @@ func readBGPMessage(conn net.Conn, timeout time.Duration) (*bgpmsg.BGPMessage, e
 	raw := make([]byte, 0, len(header)+len(body))
 	raw = append(raw, header...)
 	raw = append(raw, body...)
-	msg, err := bgpmsg.ParseBGPMessage(raw)
+	msg, err := bgpmsg.ParseBGPMessage(raw, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("parse BGP message: %w", err)
 	}
