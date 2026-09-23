@@ -62,9 +62,10 @@ deployment and fetches data.json beside it.
   }
   a.cell:hover { outline: 2px solid var(--fg); outline-offset: 1px; }
   .c-success { background: var(--ok); }
-  .c-failure, .c-timed_out { background: var(--bad); }
-  .c-cancelled { background: var(--cancel); }
-  .c-in_progress, .c-queued, .c-pending, .c-waiting { background: var(--run); }
+  .c-failure, .c-timed_out, .c-startup_failure { background: var(--bad); }
+  .c-cancelled, .c-neutral, .c-stale { background: var(--cancel); }
+  .c-in_progress, .c-queued, .c-pending, .c-waiting,
+  .c-requested, .c-action_required { background: var(--run); }
   .c-skipped { background: var(--none); border: 1px solid var(--line); }
   .empty { color: var(--dim); padding: 30px 14px; }
 

@@ -30,11 +30,18 @@ page_size=100
 pages=$(( (FETCH_RUNS + page_size - 1) / page_size ))
 
 # fetch_runs <query> -> newline-delimited run objects, newest first
+#
+# Errors are NOT swallowed. A 403 here would otherwise yield zero runs, leave
+# the job green, and publish a blank grid over a good one. A failed job keeps
+# the last deployment, which is the outcome we want.
+# Returns non-zero rather than calling fail: an exit inside a command
+# substitution only ends that subshell, and bash does not apply set -e to an
+# assignment whose value came from one. Every caller checks the status.
 fetch_runs() {
   local query=$1 page
   for ((page = 1; page <= pages; page++)); do
     gh api "repos/${REPO}/actions/runs?per_page=${page_size}&page=${page}&${query}" \
-      --jq '.workflow_runs[]' 2>/dev/null || true
+      --jq '.workflow_runs[]' || return 1
   done
 }
 
@@ -61,12 +68,24 @@ to_rows() {
       d:    ((.updated_at | fromdateiso8601)
              - ((.run_started_at // .created_at) | fromdateiso8601)),
       ev:   .event,
+      br:   .head_branch,
       # The commit subject is already in this payload, and it is usually the
       # answer to "what broke it", so it costs nothing to carry.
       msg:  ((.head_commit.message // "") | split("\n")[0] | .[0:120]),
       actor: (.actor.login // null)
-    } + (if (.pull_requests[0].number // null) != null
-         then {pr: .pull_requests[0].number} else {} end))
+    }
+    # copy-pr-bot mirrors a pull request onto pull-request/<number> and most
+    # checks run as a push to that branch, so the number is in the branch name
+    # when the runs payload has no pull_requests entry.
+    #
+    # Written as an if rather than with capture and //: capture emits NOTHING
+    # when it does not match, and `a // b` with an empty b is also empty, which
+    # deletes the whole run object instead of leaving the key off.
+    + (if (.pull_requests[0].number // null) != null then
+         {pr: .pull_requests[0].number}
+       elif ((.head_branch // "") | test("^pull-request/[0-9]+$")) then
+         {pr: ((.head_branch | ltrimstr("pull-request/")) | tonumber)}
+       else {} end))
     | group_by(._wf)
     | map({
         workflow: .[0]._wf,
@@ -88,7 +107,9 @@ annotate_failures() {
   while read -r id; do
     [ -n "$id" ] || continue
     jobs=$(gh api "repos/${REPO}/actions/runs/${id}/jobs?per_page=100" \
-      --jq '[.jobs[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped") | .name]' \
+      --jq '[.jobs[] | select(.conclusion != null and .conclusion != "success"
+                              and .conclusion != "skipped"
+                              and .conclusion != "cancelled") | .name]' \
       2>/dev/null || true)
     # gh can exit 0 and print nothing, which --argjson rejects.
     [ -n "$jobs" ] || jobs='[]'
@@ -102,9 +123,19 @@ annotate_failures() {
   ' <<<"$rows"
 }
 
+# build_view <query> [jq-select] -> rows, annotated
+#
+# The fetch is its own statement rather than the head of a pipeline. A `fail`
+# inside a pipeline only exits that subshell, and set -e does not reliably carry
+# it out through a command substitution in a function, so a 404 used to print
+# its message and then publish an empty grid anyway.
 build_view() {
-  local rows
-  rows=$(fetch_runs "$1" | to_rows)
+  local query=$1 keep=${2:-.} raw rows
+  if ! raw=$(fetch_runs "$query"); then
+    echo "generate.sh: reading runs failed (${query}); refusing to publish a partial dashboard" >&2
+    return 1
+  fi
+  rows=$(printf '%s\n' "$raw" | jq -c "select(${keep})" | to_rows)
   # An empty view is legitimate (a repo with no PR runs yet), but an empty
   # string is not JSON and --argjson would reject it below.
   [ -n "$rows" ] || rows='[]'
@@ -114,11 +145,18 @@ build_view() {
 echo "generate.sh: reading up to ${FETCH_RUNS} runs per view from ${REPO}" >&2
 
 # Everything that ran on main: the scheduled lanes and the post-merge runs.
-main_rows=$(build_view "branch=main")
-# Pull request runs. pull_request_target is the mirror-branch shape this repo
-# uses for most checks, so both events belong in the same view.
-pr_rows=$(build_view "event=pull_request")
-pr_target_rows=$(build_view "event=pull_request_target")
+if ! main_rows=$(build_view "branch=main"); then fail "could not build the main view"; fi
+
+# Pull request runs come in two shapes here, and the mirror is the bigger one.
+# copy-pr-bot pushes a pull request onto pull-request/<number> because the
+# self-hosted runners do not pick up the pull_request event, so most checks --
+# every e2e lane, CodeQL, the image build, the notices gate -- run as a push to
+# that branch and appear under neither `branch=main` nor `event=pull_request`.
+# It was 101 of the last 300 runs, the single largest shape.
+if ! pr_rows=$(build_view "event=pull_request"); then fail "could not build the pull_request view"; fi
+if ! pr_mirror_rows=$(build_view "event=push" '(.head_branch // "") | startswith("pull-request/")'); then
+  fail "could not build the mirror-branch view"
+fi
 
 mkdir -p "$(dirname "$OUT")"
 jq -n \
@@ -127,7 +165,7 @@ jq -n \
   --argjson keep "$RUNS_PER_WORKFLOW" \
   --argjson main "$main_rows" \
   --argjson pr "$pr_rows" \
-  --argjson prt "$pr_target_rows" \
+  --argjson prt "$pr_mirror_rows" \
   '{
      repo: $repo,
      generated: $generated,
@@ -139,7 +177,10 @@ jq -n \
             | map({
                 workflow: .[0].workflow,
                 workflow_url: .[0].workflow_url,
-                runs: (map(.runs) | add | sort_by(.created) | reverse | .[0:$keep])
+                # sort_by(.t), not .created: the per-run key is t. A wrong key
+                # makes every element null, the stable sort keeps input order,
+                # and reverse then hands back the oldest runs.
+                runs: (map(.runs) | add | sort_by(.t) | reverse | .[0:$keep])
               })
             | sort_by(.workflow))
      }
