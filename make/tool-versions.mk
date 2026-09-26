@@ -43,9 +43,14 @@ NFPM_VERSION  ?= 2.47.0
 KIND_VERSION    ?= v0.32.0
 KIND_SHA256_AMD64 ?= 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
 KIND_SHA256_ARM64 ?= b92cd615e97585de8ddade28ed5cd7feb4248d717c233eea5b03c37298900f5d
-KUBECTL_VERSION ?= v1.36.0
-KUBECTL_SHA256_AMD64 ?= 123d8c8844f46b1244c547fffb3c17180c0c26dac9890589fe7e67763298748e
-KUBECTL_SHA256_ARM64 ?= 9f9d9c44a7b5264515ac9da5991584e2395bd50662e651132337e7b4d0c56f8f
+# Matches the node image in controller/hack/cwe-capi-kind.yaml, so the client is
+# not a minor behind the cluster it drives. It is also the newest kubectl the
+# Flox catalogue carries, which matters because .flox/env/manifest.toml pins the
+# same version: a pin Flox cannot supply puts `flox activate` back in the state
+# where check-tool-version.sh fails and tells you to run `flox activate`.
+KUBECTL_VERSION ?= v1.37.0
+KUBECTL_SHA256_AMD64 ?= 6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f
+KUBECTL_SHA256_ARM64 ?= 922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3
 # clusterctl and the CAPI core/kubeadm providers ship as one release, so one
 # pin covers the binary and everything `clusterctl init` installs.
 CAPI_VERSION    ?= v1.12.3

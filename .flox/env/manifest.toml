@@ -24,6 +24,9 @@ golangci-lint = { pkg-path = "golangci-lint", version = "2.13.2", pkg-group = "g
 kubernetes-helm = { pkg-path = "kubernetes-helm", version = "4.2.4", pkg-group = "helm" }
 # backend-e2e.yml:118 and nkectl-bootstrap-e2e.yml:121.
 kind = { pkg-path = "kind", version = "0.32.0", pkg-group = "kind" }
+# KUBECTL_VERSION in make/tool-versions.mk. Absent here until now, so the
+# version checks fell through to whatever kubectl was on the developer PATH.
+kubectl = { pkg-path = "kubectl", version = "1.37.0", pkg-group = "kubectl" }
 gnumake.pkg-path = "gnumake"
 gnumake.outputs = "all"
 temporal-cli.pkg-path = "temporal-cli"
