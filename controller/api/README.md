@@ -58,9 +58,11 @@ make -C controller/api test
 ```
 
 `lint` also runs `lint-spec`, which lints `openapi.yaml` with vacuum against
-`openapi-lint.yaml`. Errors fail the merge gate. The warnings are the prose the
-spec still lacks; each is raised to an error once the REST API Reference is
-complete, so that coverage cannot regress afterwards.
+`openapi-lint.yaml` and fails the merge gate on any finding: every operation,
+parameter, schema and property must carry a description, every example must
+match its schema, and a description must not sit beside a bare `$ref` (wrap the
+`$ref` in `allOf`; Redoc, Swagger UI and the generator ignore `$ref` siblings).
+The rules, and why each is on or off, are commented in the ruleset.
 
 This module has **no test files**. `make test` therefore compiles the module and
 reports success without running anything. That matters when you change the API:

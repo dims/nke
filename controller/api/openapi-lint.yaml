@@ -5,9 +5,10 @@
 # merge gate runs it) applies them with vacuum, a Spectral-compatible linter
 # pinned in make/tool-versions.mk.
 #
-# Two tiers. Errors fail the gate today. Warnings measure the prose the spec
-# still lacks and fail nothing yet; each is raised to `error` once the REST API
-# Reference is complete, so that coverage cannot regress afterwards.
+# Everything here is an error: the file must be valid for the generator, the
+# request validator, Swagger UI and Fern, and every operation, parameter,
+# schema and property must carry a description, so the REST API Reference
+# cannot lose coverage once it is complete.
 extends: [[spectral:oas, recommended]]
 rules:
   # Errors: the file must be valid for oapi-codegen, the request validator,
@@ -18,20 +19,20 @@ rules:
   operation-operationId: error
   operation-operationId-unique: error
 
-  # Warnings: prose coverage. Raise to error after the docs port.
+  # Prose coverage.
   #
   # A description beside a `$ref` is read by Fern and ignored by Redoc, Swagger
-  # UI and oapi-codegen; so is `x-go-type-skip-optional-pointer` there. The docs
-  # port resolves each one: wrap the `$ref` in `allOf` so the description applies
-  # everywhere, and drop the extension, which was never in effect.
-  no-$ref-siblings: warn
-  operation-tags: warn
-  component-description: warn
-  oas3-parameter-description: warn
+  # UI and oapi-codegen; so is `x-go-type-skip-optional-pointer` there. Wrap the
+  # `$ref` in `allOf` so the description applies everywhere, and leave that
+  # extension out, since it never took effect beside a `$ref`.
+  no-$ref-siblings: error
+  operation-tags: error
+  component-description: error
+  oas3-parameter-description: error
   operation-description-present:
     description: Every operation has a description. The summary is a title, not an explanation.
     message: operation has no description
-    severity: warn
+    severity: error
     given: "$.paths[*][get,put,post,patch,delete]"
     then:
       field: description
@@ -39,7 +40,7 @@ rules:
   property-description-present:
     description: Every schema property has a description.
     message: property has no description
-    severity: warn
+    severity: error
     given: "$.components.schemas[*].properties[*]"
     then:
       field: description
