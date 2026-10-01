@@ -563,6 +563,7 @@ paths:
 
   /osProfiles:
     get:
+      x-fern-ignore: true
       summary: List OS Profiles
       operationId: listOSProfiles
       responses:
@@ -579,6 +580,7 @@ paths:
 
   /configProfiles:
     get:
+      x-fern-ignore: true
       summary: List Config Profiles
       operationId: listConfigProfiles
       responses:
@@ -640,8 +642,8 @@ components:
               - not:
                   required: [infra]
       description: |
-        Exactly one provider payload is required: supply either `nico` or `infra`.
-        A request carrying both, or neither, is rejected with 400.
+        A cluster and, optionally, its initial node pools. The provider payload is
+        fixed at creation.
       properties:
         name:
           type: string
@@ -697,6 +699,7 @@ components:
           x-go-type-skip-optional-pointer: true
           x-order: 9
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Enable Teleport SSH enrollment for nodes in this cluster. When omitted, the server-side default for the site is applied.
           x-order: 10
@@ -710,13 +713,13 @@ components:
             $ref: "#/components/schemas/NodePoolCreateConfig"
           description: The initial set of node pools to create for the cluster
           example:
-            - namePrefix: "cp"
+            - name: "gpu-workers"
+              nodeNamePrefix: "w"
+              desiredNodeCount: 2
               nico:
                 subnetIDs:
                   - "123e4567-e89b-12d3-a456-426614174000"
                 instanceTypeID: "123e4567-e89b-12d3-a456-426614174001"
-              desiredNodeCount: 1
-              controlPlane: true
           x-order: 12
         controlPlaneConfig:
           $ref: "#/components/schemas/CreateClusterControlPlaneConfig"
@@ -725,11 +728,15 @@ components:
           x-order: 13
         nico:
           $ref: "#/components/schemas/NicoClusterProvider"
-          description: Provider Nico identity fields.
+          description: NICo identifiers for the cluster, fixed at creation. Required for a NICo cluster.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraClusterProvider"
-          description: Ifra provider fields.
+          description: |
+            CAPI infrastructure payload, the alternative to `nico` for a cluster whose
+            CAPI manifests the caller supplies. Exactly one of `nico` and `infra` is
+            required; a request carrying both, or neither, is rejected with 400.
           x-go-type-skip-optional-pointer: true
     ControlPlaneConfig:
       type: object
@@ -769,6 +776,7 @@ components:
           description: A list of labels applied to control plane nodes.
           x-go-type-skip-optional-pointer: true
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Whether Teleport SSH enrollment is enabled for control plane nodes.
         nico:
@@ -776,6 +784,7 @@ components:
           description: Provider Nico control plane fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraControlPlaneProvider"
           description: Infra provider control plane fields.
           x-go-type-skip-optional-pointer: true
@@ -902,6 +911,7 @@ components:
           description: A list of labels to apply to control plane nodes.
           x-go-type-skip-optional-pointer: true
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Whether Teleport SSH enrollment is enabled for control plane nodes. When omitted, the server-side default for the site is applied.
         nico:
@@ -909,6 +919,7 @@ components:
           description: Provider Nico control plane fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraControlPlaneProvider"
           description: Infra provider control plane fields.
           x-go-type-skip-optional-pointer: true
@@ -943,6 +954,7 @@ components:
             type: string
           description: Replace the labels applied to control plane nodes.
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Enable or disable Teleport SSH enrollment for control plane nodes.
         nico:
@@ -950,6 +962,7 @@ components:
           description: The mutable subset of the Nico control plane fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraControlPlaneProviderUpdate"
           description: The mutable infra provider control plane fields.
           x-go-type-skip-optional-pointer: true
@@ -1003,6 +1016,7 @@ components:
           description: Enable or disable control plane node recycling during version upgrades. When enabled, the cluster can upgrade control plane nodes by creating new nodes with the target version and removing old nodes. When disabled, old nodes are not recycled.
           x-order: 11
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           default: false
           description: Whether Teleport SSH enrollment is enabled for nodes in this cluster.
@@ -1028,6 +1042,7 @@ components:
           description: Provider Nico identity fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraClusterProvider"
           description: Infra provider fields.
           x-go-type-skip-optional-pointer: true
@@ -1048,6 +1063,7 @@ components:
             Must not include a leading "v".
             The pattern is the version-core part of the regex from https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Enable or disable Teleport SSH enrollment for nodes in this cluster.
         enableEtcdEncryption:
@@ -1136,6 +1152,7 @@ components:
     # Node Pool
     #--------------------------------
     CloudInitFile:
+      x-fern-ignore: true
       type: object
       required:
         - path
@@ -1187,9 +1204,8 @@ components:
     NodePoolCreateConfig:
       type: object
       description: |
-        A node pool follows its cluster's provider, so exactly one provider payload is
-        required: supply either `nico` or `infra`. A request carrying both, or neither,
-        is rejected with 400.
+        A node pool and its provider settings. The provider follows the cluster's
+        and is fixed at creation.
       required:
         - name
         - desiredNodeCount
@@ -1227,6 +1243,7 @@ components:
           x-go-type-skip-optional-pointer: true
           x-order: 11
         controlPlane:
+          x-fern-ignore: true
           type: boolean
           default: false
           description: Whether the nodes in this pool should be added as Kubernetes control plane nodes
@@ -1269,16 +1286,21 @@ components:
           description: The maximum number of nodes that can be recycled at once.
           x-order: 19
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Whether Teleport SSH enrollment is enabled for nodes in this pool. When omitted, the server-side default for the site is applied based on pool role.
           x-order: 20
         nico:
           $ref: "#/components/schemas/NicoNodePoolProvider"
-          description: Provider Nico node pool fields.
+          description: NICo settings for the pool, fixed at creation. Required for a NICo cluster.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraNodePoolProvider"
-          description: Infra provider node pool fields.
+          description: |
+            CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
+            of `nico` and `infra` is required; a request carrying both, or neither, is
+            rejected with 400.
           x-go-type-skip-optional-pointer: true
     UpdateNodePoolRequest:
       type: object
@@ -1325,6 +1347,7 @@ components:
             - 0: Sequential upgrade (teardown then provision)
           default: 0
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           description: Enable or disable Teleport SSH enrollment for nodes in this pool.
         # Same pattern and rationale as UpdateClusterRequest.controlPlaneKubernetesVersion (semver.org version core; no leading "v").
@@ -1341,6 +1364,7 @@ components:
           description: The mutable subset of the Nico node pool fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraNodePoolProviderUpdate"
           description: The mutable Infra provider node pool fields.
           x-go-type-skip-optional-pointer: true
@@ -1393,6 +1417,7 @@ components:
           description: The amount of memory to reserve for Kubernetes processes (e.g., "2Gi", "250Mi"). Empty when the kubelet configuration patch uses its default (2Gi).
           x-order: 14
         controlPlane:
+          x-fern-ignore: true
           type: boolean
           description: Whether the nodes in this pool are control plane nodes
           x-order: 15
@@ -1448,6 +1473,7 @@ components:
           default: 0
           x-order: 25
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           default: false
           description: Whether Teleport SSH enrollment is enabled for nodes in this pool.
@@ -1457,6 +1483,7 @@ components:
           description: Provider Nico node pool fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraNodePoolProvider"
           description: Infra provider node pool fields.
           x-go-type-skip-optional-pointer: true
@@ -1642,6 +1669,7 @@ components:
           description: The amount of memory to reserve for Kubernetes processes (e.g., "2Gi", "250Mi"). Empty when the kubelet configuration patch uses its default (2Gi).
           readOnly: true
         teleportEnabled:
+          x-fern-ignore: true
           type: boolean
           default: false
           description: Whether Teleport SSH enrollment is enabled for nodes in this node set.
@@ -1651,6 +1679,7 @@ components:
           description: Provider Nico node set fields.
           x-go-type-skip-optional-pointer: true
         infra:
+          x-fern-ignore: true
           $ref: "#/components/schemas/InfraNodeSetProvider"
           description: Infra provider node set fields.
           x-go-type-skip-optional-pointer: true
@@ -2193,6 +2222,7 @@ components:
           x-order: 1
 
     OSProfile:
+      x-fern-ignore: true
       type: object
       required:
         - name
@@ -2203,6 +2233,7 @@ components:
           x-order: 1
 
     ConfigProfile:
+      x-fern-ignore: true
       type: object
       required:
         - name
@@ -2234,6 +2265,7 @@ components:
           x-go-type-skip-optional-pointer: true
 
     InfraClusterProvider:
+      x-fern-ignore: true
       type: object
       additionalProperties: false
       description: |
@@ -2372,6 +2404,7 @@ components:
           $ref: "#/components/schemas/DiskSelectionStrategyCreate"
 
     InfraNodePoolProvider:
+      x-fern-ignore: true
       type: object
       additionalProperties: false
       description: Infra provider fields for a node pool. Mutually exclusive with `nico`.
@@ -2395,6 +2428,7 @@ components:
           x-go-type-skip-optional-pointer: true
 
     InfraNodePoolProviderUpdate:
+      x-fern-ignore: true
       type: object
       additionalProperties: false
       description: |
@@ -2420,6 +2454,7 @@ components:
           x-go-type-skip-optional-pointer: true
 
     InfraNodeSetProvider:
+      x-fern-ignore: true
       type: object
       additionalProperties: false
       description: Infra provider fields for a node set (read-only snapshot).
@@ -2585,6 +2620,7 @@ components:
           x-go-type-skip-optional-pointer: true
 
     InfraControlPlaneProvider:
+      x-fern-ignore: true
       type: object
       additionalProperties: false
       description: Infra provider fields for cluster-level control plane configuration. Mutually exclusive with `nico`.
@@ -2608,6 +2644,7 @@ components:
           x-go-type-skip-optional-pointer: true
 
     InfraControlPlaneProviderUpdate:
+      x-fern-ignore: true
       type: object
       additionalProperties: false
       description: |
@@ -2667,6 +2704,7 @@ components:
       x-go-type-skip-optional-pointer: true
 
     ListOSProfilesResponse:
+      x-fern-ignore: true
       type: object
       required:
         - osProfiles
@@ -2678,6 +2716,7 @@ components:
           description: The list of OS profiles
 
     ListConfigProfilesResponse:
+      x-fern-ignore: true
       type: object
       required:
         - configProfiles

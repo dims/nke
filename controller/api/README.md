@@ -9,7 +9,7 @@ without pulling in the engine and everything the engine needs. It is imported by
 
 ## What is written by hand, and what is generated
 
-`openapi.yaml` is the source of truth. It is OpenAPI 3.0.3, and it describes 16
+`openapi.yaml` is the source of truth. It is OpenAPI 3.0.3, and it describes 15
 paths.
 
 These three files are generated from it and must not be edited:
@@ -36,6 +36,13 @@ Edit `openapi.yaml`, then regenerate and commit the result:
 make -C controller generate-api
 ```
 
+Operations, schemas and properties that are not part of the customer-facing
+API carry `x-fern-ignore: true`. Fern, which builds the REST API Reference tab
+of the documentation site from this file, leaves them out; Swagger UI at
+`/api/docs/` and the generated Go are unaffected. Today that is the `infra`
+provider, `teleportEnabled`, the legacy `controlPlane` node-pool flag, and the
+`/osProfiles` and `/configProfiles` endpoints.
+
 Commit the changed `*.gen.go` files with the specification change. They are
 checked in on purpose, so that consumers do not need the generator.
 
@@ -49,6 +56,11 @@ names the files that are out of date.
 make -C controller/api lint
 make -C controller/api test
 ```
+
+`lint` also runs `lint-spec`, which lints `openapi.yaml` with vacuum against
+`openapi-lint.yaml`. Errors fail the merge gate. The warnings are the prose the
+spec still lacks; each is raised to an error once the REST API Reference is
+complete, so that coverage cannot regress afterwards.
 
 This module has **no test files**. `make test` therefore compiles the module and
 reports success without running anything. That matters when you change the API:

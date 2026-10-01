@@ -20,9 +20,12 @@ endif
 GOLANGCI_LINT_GOWORK :=
 include ../../make/golangci.mk
 
+# VACUUM_VERSION, pinned with the other repository-wide tool versions.
+include ../../make/tool-versions.mk
+
 GO_TEST_FLAGS ?=
 
-.PHONY: help lint test
+.PHONY: help lint lint-spec test
 
 ##@ Help
 
@@ -34,8 +37,14 @@ help: ## Show the available targets.
 
 ##@ Build and test
 
-lint: ## Run golangci-lint over this module. (run by the merge gate)
+lint: lint-spec ## Run golangci-lint and the OpenAPI lint over this module. (run by the merge gate)
 	@$(GOLANGCI_LINT_RUN) run --timeout 10m
+
+# vacuum is a Go program, so `go run` pins it the way generate.go pins gofumpt,
+# and nothing has to be installed. The rules, and why each is on or off, are in
+# openapi-lint.yaml.
+lint-spec: ## Lint openapi.yaml against openapi-lint.yaml.
+	$(GO) run github.com/daveshanley/vacuum@$(VACUUM_VERSION) lint --ruleset openapi-lint.yaml --details --no-banner --no-style --no-clip --min-score 0 openapi.yaml
 
 test: ## Run this module's tests.
 	$(GO) test $(GO_TEST_FLAGS) ./...

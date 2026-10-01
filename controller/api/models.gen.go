@@ -350,8 +350,8 @@ type CreateClusterControlPlaneConfig struct {
 	TeleportEnabled *bool `json:"teleportEnabled,omitempty"`
 }
 
-// CreateClusterRequest Exactly one provider payload is required: supply either `nico` or `infra`.
-// A request carrying both, or neither, is rejected with 400.
+// CreateClusterRequest A cluster and, optionally, its initial node pools. The provider payload is
+// fixed at creation.
 type CreateClusterRequest struct {
 	// Name The name of the cluster. Must be a lowercase DNS label, because CWE derives the names of the cluster's CAPI resources and its node names from it.
 	Name string `json:"name"`
@@ -979,9 +979,8 @@ type NodePoolConfigHistory struct {
 	Changes []NodePoolConfigChange `json:"changes"`
 }
 
-// NodePoolCreateConfig A node pool follows its cluster's provider, so exactly one provider payload is
-// required: supply either `nico` or `infra`. A request carrying both, or neither,
-// is rejected with 400.
+// NodePoolCreateConfig A node pool and its provider settings. The provider follows the cluster's
+// and is fixed at creation.
 type NodePoolCreateConfig struct {
 	// Name The name of the node pool (must conform to Kubernetes resource naming standards)
 	Name string `json:"name"`
