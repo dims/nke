@@ -1556,7 +1556,7 @@ components:
       type: string
       minLength: 1
       description: |
-        Prefix for generated node names: <cluster name>-<nodeNamePrefix>-<suffix>.
+        Prefix for generated node names: `<cluster name>-<nodeNamePrefix>-<suffix>`.
         CWE assigns suffix as a 4-digit decimal number (0000–9999).
         Generated names must fit within 63 characters (Kubernetes Node name limit).
         Maximum prefix length depends on cluster name length.
@@ -1591,7 +1591,7 @@ components:
         nodeNamePrefix:
           allOf:
             - $ref: "#/components/schemas/NodeNamePrefix"
-          description: Node names are <cluster>-<prefix>-<NNNN> (four-digit suffix), at most 63 characters in total.
+          description: Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
         systemReservedMemory:
           type: string
           description: Memory reserved for system daemons. Nodes reserve 16Gi when omitted.
@@ -1762,7 +1762,7 @@ components:
         nodeNamePrefix:
           allOf:
             - $ref: "#/components/schemas/NodeNamePrefix"
-          description: Node names are <cluster>-<prefix>-<NNNN> (four-digit suffix), at most 63 characters in total.
+          description: Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
         kubernetesVersion:
           type: string
           description: Desired Kubernetes version for the pool's nodes. Inherits the cluster's version on create.

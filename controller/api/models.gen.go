@@ -445,7 +445,7 @@ type CreateNodePoolRequest struct {
 	// Nico NICo settings for the pool.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
-	// NodeNamePrefix Node names are <cluster>-<prefix>-<NNNN> (four-digit suffix), at most 63 characters in total.
+	// NodeNamePrefix Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
 	NodeNamePrefix NodeNamePrefix `json:"nodeNamePrefix"`
 
 	// AutoModeDisabled Disables auto-mode (automatic node recycling).
@@ -914,7 +914,7 @@ type NodeHistoryWorkflow struct {
 	WorkflowType string `json:"workflowType"`
 }
 
-// NodeNamePrefix Prefix for generated node names: <cluster name>-<nodeNamePrefix>-<suffix>.
+// NodeNamePrefix Prefix for generated node names: `<cluster name>-<nodeNamePrefix>-<suffix>`.
 // CWE assigns suffix as a 4-digit decimal number (0000–9999).
 // Generated names must fit within 63 characters (Kubernetes Node name limit).
 // Maximum prefix length depends on cluster name length.
@@ -967,7 +967,7 @@ type NodePool struct {
 	// Nico NICo settings for the pool.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
-	// NodeNamePrefix Node names are <cluster>-<prefix>-<NNNN> (four-digit suffix), at most 63 characters in total.
+	// NodeNamePrefix Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
 	NodeNamePrefix NodeNamePrefix `json:"nodeNamePrefix"`
 
 	// AutoModeDisabled Disables auto-mode (automatic node recycling).
@@ -1064,7 +1064,7 @@ type NodePoolCreateConfig struct {
 	// Nico NICo settings for the pool.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
-	// NodeNamePrefix Node names are <cluster>-<prefix>-<NNNN> (four-digit suffix), at most 63 characters in total.
+	// NodeNamePrefix Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
 	NodeNamePrefix NodeNamePrefix `json:"nodeNamePrefix"`
 
 	// AutoProvisionDisabled Disables automatic provisioning for the pool.
