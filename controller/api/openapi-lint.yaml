@@ -19,6 +19,12 @@ rules:
   operation-operationId-unique: error
 
   # Warnings: prose coverage. Raise to error after the docs port.
+  #
+  # A description beside a `$ref` is read by Fern and ignored by Redoc, Swagger
+  # UI and oapi-codegen; so is `x-go-type-skip-optional-pointer` there. The docs
+  # port resolves each one: wrap the `$ref` in `allOf` so the description applies
+  # everywhere, and drop the extension, which was never in effect.
+  no-$ref-siblings: warn
   operation-tags: warn
   component-description: warn
   oas3-parameter-description: warn
@@ -46,10 +52,6 @@ rules:
   camel-case-properties: off
   # DELETE /nodes/{nodeID} takes an optional body (`machineHealthIssue`).
   no-request-body: off
-  # oapi-codegen reads `x-order` and `x-go-type-skip-optional-pointer` next to
-  # a `$ref`, and the description beside a `$ref` is the one the generated Go
-  # comment and the rendered docs show for that property.
-  no-$ref-siblings: off
   # `not:` subschemas carry no type on purpose, and create/response/update
   # twins repeat their descriptions on purpose.
   oas-missing-type: off

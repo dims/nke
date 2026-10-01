@@ -727,17 +727,17 @@ components:
             Cluster-level control plane configuration.
           x-order: 13
         nico:
-          $ref: "#/components/schemas/NicoClusterProvider"
+          allOf:
+            - $ref: "#/components/schemas/NicoClusterProvider"
           description: NICo identifiers for the cluster, fixed at creation. Required for a NICo cluster.
-          x-go-type-skip-optional-pointer: true
         infra:
           x-fern-ignore: true
-          $ref: "#/components/schemas/InfraClusterProvider"
+          allOf:
+            - $ref: "#/components/schemas/InfraClusterProvider"
           description: |
             CAPI infrastructure payload, the alternative to `nico` for a cluster whose
             CAPI manifests the caller supplies. Exactly one of `nico` and `infra` is
             required; a request carrying both, or neither, is rejected with 400.
-          x-go-type-skip-optional-pointer: true
     ControlPlaneConfig:
       type: object
       additionalProperties: false
@@ -883,8 +883,8 @@ components:
                   required: [infra]
       description: |
         Writable cluster-level control plane configuration supplied at cluster creation.
-        Exactly one provider payload is required: supply either `nico` or `infra`.
-        A request carrying both, or neither, is rejected with 400.
+        `nico` carries the NICo settings for the control-plane nodes; it is required
+        for a NICo cluster.
       properties:
         desiredCount:
           type: integer
@@ -929,9 +929,8 @@ components:
       not:
         required: [nico, infra]
       description: |
-        `nico` and `infra` are mutually exclusive: supply at most one of them (both
-        may be omitted). A request carrying both is rejected with 400, as is a
-        provider payload that does not match the cluster.
+        All fields are optional. A provider payload that does not match the cluster's
+        provider is rejected with 400.
       properties:
         desiredCount:
           type: integer
@@ -1291,26 +1290,25 @@ components:
           description: Whether Teleport SSH enrollment is enabled for nodes in this pool. When omitted, the server-side default for the site is applied based on pool role.
           x-order: 20
         nico:
-          $ref: "#/components/schemas/NicoNodePoolProvider"
+          allOf:
+            - $ref: "#/components/schemas/NicoNodePoolProvider"
           description: NICo settings for the pool, fixed at creation. Required for a NICo cluster.
-          x-go-type-skip-optional-pointer: true
         infra:
           x-fern-ignore: true
-          $ref: "#/components/schemas/InfraNodePoolProvider"
+          allOf:
+            - $ref: "#/components/schemas/InfraNodePoolProvider"
           description: |
             CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
             of `nico` and `infra` is required; a request carrying both, or neither, is
             rejected with 400.
-          x-go-type-skip-optional-pointer: true
     UpdateNodePoolRequest:
       type: object
       additionalProperties: false
       not:
         required: [nico, infra]
       description: |
-        `nico` and `infra` are mutually exclusive: supply at most one of them (both
-        may be omitted). A request carrying both is rejected with 400, as is a
-        provider payload that does not match the node pool's cluster.
+        All fields are optional. A provider payload that does not match the node pool's
+        cluster is rejected with 400.
       # No required fields since all fields are optional
       properties:
         autoProvisionDisabled:
@@ -2246,7 +2244,7 @@ components:
     NicoClusterProvider:
       type: object
       additionalProperties: false
-      description: Nico identity fields for a cluster. Mutually exclusive with `infra`.
+      description: NICo identifiers for a cluster, fixed at creation.
       properties:
         orgID:
           type: string
@@ -2282,7 +2280,7 @@ components:
     NicoNodePoolProvider:
       type: object
       additionalProperties: false
-      description: Nico fields for a node pool. Mutually exclusive with `infra`.
+      description: NICo settings for a node pool.
       properties:
         subnetIDs:
           type: array
@@ -2434,6 +2432,7 @@ components:
       description: |
         The mutable infra provider node pool fields. Every field carries three states: omitted
         leaves the stored value alone, a value replaces it, and an empty value clears it.
+        Mutually exclusive with `nico`: a request carrying both is rejected with 400.
       properties:
         machineTemplate:
           type: object
@@ -2483,7 +2482,7 @@ components:
       description: |
         The stored Nico cluster-level control plane fields, as reported on read.
         Requests use `NicoControlPlaneProviderCreate` and `NicoControlPlaneProviderUpdate`,
-        which omit the fields that direction cannot set. Mutually exclusive with `infra`.
+        which omit the fields that direction cannot set.
       properties:
         instanceTypePreference:
           type: array
@@ -2650,6 +2649,7 @@ components:
       description: |
         The mutable infra provider control plane fields. Every field carries three states: omitted
         leaves the stored value alone, a value replaces it, and an empty value clears it.
+        Mutually exclusive with `nico`: a request carrying both is rejected with 400.
       properties:
         machineTemplate:
           type: object

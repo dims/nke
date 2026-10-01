@@ -102,7 +102,7 @@ type Cluster struct {
 	Infra   *InfraClusterProvider `json:"infra,omitempty"`
 	Network ClusterNetwork        `json:"network"`
 
-	// Nico Nico identity fields for a cluster. Mutually exclusive with `infra`.
+	// Nico NICo identifiers for a cluster, fixed at creation.
 	Nico *NicoClusterProvider `json:"nico,omitempty"`
 }
 
@@ -189,7 +189,7 @@ type ControlPlaneConfig struct {
 
 	// Nico The stored Nico cluster-level control plane fields, as reported on read.
 	// Requests use `NicoControlPlaneProviderCreate` and `NicoControlPlaneProviderUpdate`,
-	// which omit the fields that direction cannot set. Mutually exclusive with `infra`.
+	// which omit the fields that direction cannot set.
 	Nico *NicoControlPlaneProvider `json:"nico,omitempty"`
 
 	// NodeLabels A list of labels applied to control plane nodes.
@@ -322,8 +322,8 @@ type ControlPlaneStatus struct {
 }
 
 // CreateClusterControlPlaneConfig Writable cluster-level control plane configuration supplied at cluster creation.
-// Exactly one provider payload is required: supply either `nico` or `infra`.
-// A request carrying both, or neither, is rejected with 400.
+// `nico` carries the NICo settings for the control-plane nodes; it is required
+// for a NICo cluster.
 type CreateClusterControlPlaneConfig struct {
 	// DesiredCount The desired number of cluster-level control plane nodes. Must be at least 1.
 	DesiredCount int `json:"desiredCount"`
@@ -386,19 +386,19 @@ type CreateClusterRequest struct {
 	TeleportEnabled *bool `json:"teleportEnabled,omitempty"`
 
 	// ControlPlaneConfig Writable cluster-level control plane configuration supplied at cluster creation.
-	// Exactly one provider payload is required: supply either `nico` or `infra`.
-	// A request carrying both, or neither, is rejected with 400.
+	// `nico` carries the NICo settings for the control-plane nodes; it is required
+	// for a NICo cluster.
 	ControlPlaneConfig *CreateClusterControlPlaneConfig `json:"controlPlaneConfig,omitempty"`
 
-	// Infra CAPI infrastructure fields for a cluster: the caller supplies the CAPI manifests
-	// directly. Not to be used merely because a cluster is provisioned through CAPI —
-	// `nico` clusters may be too. Mutually exclusive with `nico`.
+	// Infra CAPI infrastructure payload, the alternative to `nico` for a cluster whose
+	// CAPI manifests the caller supplies. Exactly one of `nico` and `infra` is
+	// required; a request carrying both, or neither, is rejected with 400.
 	Infra *InfraClusterProvider `json:"infra,omitempty"`
 
 	// Network Non-default pod or service CIDRs are supported only with the ovn-kubernetes CNI plugin.
 	Network *ClusterNetworkCreateConfig `json:"network,omitempty"`
 
-	// Nico Nico identity fields for a cluster. Mutually exclusive with `infra`.
+	// Nico NICo identifiers for the cluster, fixed at creation. Required for a NICo cluster.
 	Nico *NicoClusterProvider `json:"nico,omitempty"`
 
 	// NodePools The initial set of node pools to create for the cluster
@@ -434,10 +434,12 @@ type CreateNodePoolRequest struct {
 	// AutoProvisionDisabled Whether the node pool is disabled for auto-provisioning.
 	AutoProvisionDisabled *bool `json:"autoProvisionDisabled,omitempty"`
 
-	// Infra Infra provider fields for a node pool. Mutually exclusive with `nico`.
+	// Infra CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
+	// of `nico` and `infra` is required; a request carrying both, or neither, is
+	// rejected with 400.
 	Infra *InfraNodePoolProvider `json:"infra,omitempty"`
 
-	// Nico Nico fields for a node pool. Mutually exclusive with `infra`.
+	// Nico NICo settings for the pool, fixed at creation. Required for a NICo cluster.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
 	// NodeNamePrefix Prefix for generated node names: <cluster name>-<nodeNamePrefix>-<suffix>.
@@ -504,6 +506,7 @@ type InfraControlPlaneProvider struct {
 
 // InfraControlPlaneProviderUpdate The mutable infra provider control plane fields. Every field carries three states: omitted
 // leaves the stored value alone, a value replaces it, and an empty value clears it.
+// Mutually exclusive with `nico`: a request carrying both is rejected with 400.
 type InfraControlPlaneProviderUpdate struct {
 	// BootstrapFiles Cloud-init write_files entries for CAPI-backed control plane nodes
 	BootstrapFiles []CloudInitFile `json:"bootstrapFiles,omitempty"`
@@ -529,6 +532,7 @@ type InfraNodePoolProvider struct {
 
 // InfraNodePoolProviderUpdate The mutable infra provider node pool fields. Every field carries three states: omitted
 // leaves the stored value alone, a value replaces it, and an empty value clears it.
+// Mutually exclusive with `nico`: a request carrying both is rejected with 400.
 type InfraNodePoolProviderUpdate struct {
 	// BootstrapFiles Cloud-init write_files entries for CAPI-backed nodes
 	BootstrapFiles []CloudInitFile `json:"bootstrapFiles,omitempty"`
@@ -605,7 +609,7 @@ type MachineHealthIssue struct {
 	Details string `json:"details,omitempty"`
 }
 
-// NicoClusterProvider Nico identity fields for a cluster. Mutually exclusive with `infra`.
+// NicoClusterProvider NICo identifiers for a cluster, fixed at creation.
 type NicoClusterProvider struct {
 	// OrgID The ID of the NGC organization that owns the cluster
 	OrgID string `json:"orgID,omitempty"`
@@ -619,7 +623,7 @@ type NicoClusterProvider struct {
 
 // NicoControlPlaneProvider The stored Nico cluster-level control plane fields, as reported on read.
 // Requests use `NicoControlPlaneProviderCreate` and `NicoControlPlaneProviderUpdate`,
-// which omit the fields that direction cannot set. Mutually exclusive with `infra`.
+// which omit the fields that direction cannot set.
 type NicoControlPlaneProvider struct {
 	// ConfigProfile Config profile name for control plane nodes
 	ConfigProfile string `json:"configProfile,omitempty"`
@@ -689,7 +693,7 @@ type NicoControlPlaneProviderUpdate struct {
 	VpcPrefixIDs []openapi_types.UUID `json:"vpcPrefixIDs,omitempty"`
 }
 
-// NicoNodePoolProvider Nico fields for a node pool. Mutually exclusive with `infra`.
+// NicoNodePoolProvider NICo settings for a node pool.
 type NicoNodePoolProvider struct {
 	// ConfigProfile Config profile name for nodes
 	ConfigProfile string `json:"configProfile,omitempty"`
@@ -913,7 +917,7 @@ type NodePool struct {
 	// Infra Infra provider fields for a node pool. Mutually exclusive with `nico`.
 	Infra *InfraNodePoolProvider `json:"infra,omitempty"`
 
-	// Nico Nico fields for a node pool. Mutually exclusive with `infra`.
+	// Nico NICo settings for a node pool.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
 	// NodeNamePrefix Prefix for generated node names: <cluster name>-<nodeNamePrefix>-<suffix>.
@@ -1003,10 +1007,12 @@ type NodePoolCreateConfig struct {
 	// Description An optional description for the node pool.
 	Description *string `json:"description,omitempty"`
 
-	// Infra Infra provider fields for a node pool. Mutually exclusive with `nico`.
+	// Infra CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
+	// of `nico` and `infra` is required; a request carrying both, or neither, is
+	// rejected with 400.
 	Infra *InfraNodePoolProvider `json:"infra,omitempty"`
 
-	// Nico Nico fields for a node pool. Mutually exclusive with `infra`.
+	// Nico NICo settings for the pool, fixed at creation. Required for a NICo cluster.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
 	// NodeNamePrefix Prefix for generated node names: <cluster name>-<nodeNamePrefix>-<suffix>.
@@ -1067,15 +1073,15 @@ type OSProfile struct {
 	Name string `json:"name"`
 }
 
-// UpdateClusterControlPlaneConfig `nico` and `infra` are mutually exclusive: supply at most one of them (both
-// may be omitted). A request carrying both is rejected with 400, as is a
-// provider payload that does not match the cluster.
+// UpdateClusterControlPlaneConfig All fields are optional. A provider payload that does not match the cluster's
+// provider is rejected with 400.
 type UpdateClusterControlPlaneConfig struct {
 	// DesiredCount The desired number of cluster-level control plane nodes. Must be at least 1.
 	DesiredCount *int `json:"desiredCount,omitempty"`
 
 	// Infra The mutable infra provider control plane fields. Every field carries three states: omitted
 	// leaves the stored value alone, a value replaces it, and an empty value clears it.
+	// Mutually exclusive with `nico`: a request carrying both is rejected with 400.
 	Infra *InfraControlPlaneProviderUpdate `json:"infra,omitempty"`
 
 	// MaxSurge Set cluster-level max surge.
@@ -1102,9 +1108,8 @@ type UpdateClusterControlPlaneConfig struct {
 
 // UpdateClusterRequest defines model for UpdateClusterRequest.
 type UpdateClusterRequest struct {
-	// ControlPlaneConfig `nico` and `infra` are mutually exclusive: supply at most one of them (both
-	// may be omitted). A request carrying both is rejected with 400, as is a
-	// provider payload that does not match the cluster.
+	// ControlPlaneConfig All fields are optional. A provider payload that does not match the cluster's
+	// provider is rejected with 400.
 	ControlPlaneConfig *UpdateClusterControlPlaneConfig `json:"controlPlaneConfig,omitempty"`
 
 	// ControlPlaneKubernetesVersion Target Kubernetes version for control plane upgrade (must be greater than current version).
@@ -1152,9 +1157,8 @@ type UpdateInProgress struct {
 // UpdateInProgressType The kind of long-running cluster mutation in flight.
 type UpdateInProgressType string
 
-// UpdateNodePoolRequest `nico` and `infra` are mutually exclusive: supply at most one of them (both
-// may be omitted). A request carrying both is rejected with 400, as is a
-// provider payload that does not match the node pool's cluster.
+// UpdateNodePoolRequest All fields are optional. A provider payload that does not match the node pool's
+// cluster is rejected with 400.
 type UpdateNodePoolRequest struct {
 	// AutoModeDisabled Whether the node pool is disabled for auto-mode (automatic node recycling).
 	AutoModeDisabled *bool `json:"autoModeDisabled,omitempty"`
@@ -1170,6 +1174,7 @@ type UpdateNodePoolRequest struct {
 
 	// Infra The mutable infra provider node pool fields. Every field carries three states: omitted
 	// leaves the stored value alone, a value replaces it, and an empty value clears it.
+	// Mutually exclusive with `nico`: a request carrying both is rejected with 400.
 	Infra *InfraNodePoolProviderUpdate `json:"infra,omitempty"`
 
 	// KubeReservedMemory The amount of memory to reserve for Kubernetes processes (e.g., "2Gi", "250Mi"). Set an empty value to restore the kubelet configuration patch default (2Gi).
