@@ -649,10 +649,10 @@ type NicoControlPlaneProvider struct {
 	VpcPrefixIDs []openapi_types.UUID `json:"vpcPrefixIDs,omitempty"`
 }
 
-// NicoControlPlaneProviderCreate NICo settings for control-plane nodes at creation. Exactly one of subnetIDs and
-// vpcPrefixIDs is required.
+// NicoControlPlaneProviderCreate NICo settings for control-plane nodes at creation. osProfile and configProfile
+// are required, and exactly one of subnetIDs and vpcPrefixIDs.
 type NicoControlPlaneProviderCreate struct {
-	// ConfigProfile Config profile name for the control-plane nodes.
+	// ConfigProfile Config profile name for the control-plane nodes. Required.
 	ConfigProfile string `json:"configProfile,omitempty"`
 
 	// InstanceTypePreference Ordered list of acceptable NICo instance types; index 0 is the highest priority.
@@ -693,9 +693,10 @@ type NicoControlPlaneProviderUpdate struct {
 	VpcPrefixIDs []openapi_types.UUID `json:"vpcPrefixIDs,omitempty"`
 }
 
-// NicoNodePoolProvider NICo settings for a node pool. Exactly one of subnetIDs and vpcPrefixIDs is required.
+// NicoNodePoolProvider NICo settings for a node pool. instanceTypeID, osProfile and configProfile are
+// required, and exactly one of subnetIDs and vpcPrefixIDs.
 type NicoNodePoolProvider struct {
-	// ConfigProfile Config profile name for the pool's nodes.
+	// ConfigProfile Config profile name for the pool's nodes. Required when creating a pool.
 	ConfigProfile string `json:"configProfile,omitempty"`
 
 	// DiskSelectionStrategy Which disk the OS is installed on. Default smallest.
@@ -759,7 +760,7 @@ type NicoNodeProvider struct {
 
 // NicoNodeSetProvider NICo settings in a node set (read-only snapshot).
 type NicoNodeSetProvider struct {
-	// ConfigProfile Config profile name for the pool's nodes.
+	// ConfigProfile Config profile name for the pool's nodes. Required when creating a pool.
 	ConfigProfile string `json:"configProfile,omitempty"`
 
 	// DiskSelectionStrategy Which disk the OS is installed on. Default smallest.

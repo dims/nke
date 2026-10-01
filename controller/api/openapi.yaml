@@ -242,6 +242,7 @@ paths:
 
         Returns 400 for, among others: a duplicate cluster name; missing
         `nico.orgID`, `siteID` or `vpcID`; an unsupported `cniPlugin`; a
+        missing `controlPlaneConfig.nico.osProfile` or `configProfile`; a
         control-plane `maxSurge` greater than 1; a pod CIDR too small for the
         requested nodes plus surge; a `controlPlaneVIP` inside the pod or
         service CIDR.
@@ -273,6 +274,7 @@ paths:
                   vpcPrefixIDs: [2d4f6b8a-0c2e-4a4f-b6d8-f0c2e4a6b8d0]
                   sshKeyGroupIDs: [3e5a7c9b-1d3f-4b5a-c7e9-a1d3f5b7c9e1]
                   osProfile: nke-260625-24.04-x86-fde
+                  configProfile: example-control-plane
               nodePools:
                 - name: gpu-workers
                   nodeNamePrefix: w
@@ -285,6 +287,7 @@ paths:
                     vpcPrefixIDs: [2d4f6b8a-0c2e-4a4f-b6d8-f0c2e4a6b8d0]
                     sshKeyGroupIDs: [3e5a7c9b-1d3f-4b5a-c7e9-a1d3f5b7c9e1]
                     osProfile: nke-260625-24.04-x86-fde
+                    configProfile: example-worker
       responses:
         "201":
           description: Cluster created; provisioning has started
@@ -528,9 +531,10 @@ paths:
         cluster's Kubernetes version.
 
         Returns 400 for, among others: parent cluster not found; a duplicate
-        pool name in the cluster; missing `nico.instanceTypeID` or
-        `nico.osProfile`; not exactly one of `subnetIDs` and `vpcPrefixIDs`;
-        a pod CIDR too small for the requested nodes.
+        pool name in the cluster; missing `nico.instanceTypeID`,
+        `nico.osProfile` or `nico.configProfile`; not exactly one of
+        `subnetIDs` and `vpcPrefixIDs`; a pod CIDR too small for the requested
+        nodes.
       requestBody:
         required: true
         description: The node pool to create.
@@ -553,6 +557,7 @@ paths:
                 vpcPrefixIDs: [2d4f6b8a-0c2e-4a4f-b6d8-f0c2e4a6b8d0]
                 sshKeyGroupIDs: [3e5a7c9b-1d3f-4b5a-c7e9-a1d3f5b7c9e1]
                 osProfile: nke-260625-24.04-x86-fde
+                configProfile: example-worker
                 diskSelectionStrategy: largest
       responses:
         "201":
@@ -2637,7 +2642,9 @@ components:
     NicoNodePoolProvider:
       type: object
       additionalProperties: false
-      description: NICo settings for a node pool. Exactly one of subnetIDs and vpcPrefixIDs is required.
+      description: |
+        NICo settings for a node pool. instanceTypeID, osProfile and configProfile are
+        required, and exactly one of subnetIDs and vpcPrefixIDs.
       properties:
         subnetIDs:
           type: array
@@ -2680,7 +2687,7 @@ components:
           x-go-type-skip-optional-pointer: true
         configProfile:
           type: string
-          description: Config profile name for the pool's nodes.
+          description: Config profile name for the pool's nodes. Required when creating a pool.
           x-go-type-skip-optional-pointer: true
         diskSelectionStrategy:
           $ref: "#/components/schemas/DiskSelectionStrategyCreate"
@@ -2748,7 +2755,7 @@ components:
           x-go-type-skip-optional-pointer: true
         configProfile:
           type: string
-          description: Config profile name for the pool's nodes.
+          description: Config profile name for the pool's nodes. Required when creating a pool.
           x-go-type-skip-optional-pointer: true
         diskSelectionStrategy:
           $ref: "#/components/schemas/DiskSelectionStrategyCreate"
@@ -2884,8 +2891,8 @@ components:
       type: object
       additionalProperties: false
       description: |
-        NICo settings for control-plane nodes at creation. Exactly one of subnetIDs and
-        vpcPrefixIDs is required.
+        NICo settings for control-plane nodes at creation. osProfile and configProfile
+        are required, and exactly one of subnetIDs and vpcPrefixIDs.
       properties:
         instanceTypePreference:
           type: array
@@ -2916,7 +2923,7 @@ components:
           x-go-type-skip-optional-pointer: true
         configProfile:
           type: string
-          description: Config profile name for the control-plane nodes.
+          description: Config profile name for the control-plane nodes. Required.
           x-go-type-skip-optional-pointer: true
         sshKeyGroupIDs:
           type: array
