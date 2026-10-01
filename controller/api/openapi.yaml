@@ -105,7 +105,7 @@ tags:
       Controller (NICo) bare-metal infrastructure. Each cluster, control plane
       and node pool carries a `nico` object with the NICo identifiers it uses:
       organization, site and VPC at the cluster level; instance type,
-      networking, SSH key groups and OS release at the control-plane and node
+      networking, SSH key groups and OS profile at the control-plane and node
       pool level. A cluster's provider is fixed at creation.
 
       **Kubernetes versions.** Versions are semantic-version cores (X.Y.Z) with
@@ -134,7 +134,7 @@ tags:
 
       - **Size.** `controlPlaneConfig.desiredCount` sets the number of
         control-plane nodes. It is required when you create a cluster.
-      - **Rollouts.** When the control-plane configuration changes (OS release
+      - **Rollouts.** When the control-plane configuration changes (OS profile
         or Kubernetes version), NKE compares each control-plane node with the
         desired configuration and replaces drifted nodes. `maxSurge` (0 or 1)
         controls whether a replacement node is added before the old one is
@@ -152,25 +152,15 @@ tags:
       changed through `PATCH /clusters/{clusterID}`. Its configuration history is
       an ordered list of snapshots of control-plane configuration changes.
 
-      **OS releases (`osProfile`).** The OS and first-boot configuration for every
-      node come from a release in a catalog the Operator curates. Control-plane
-      and node pool requests select a release by name in the `nico.osProfile`
-      field. The field name is kept for compatibility; its value is a release
-      name. The catalog holds three kinds of entries: a MachineImage, a bootable
-      machine image; a ClusterRelease, a MachineImage plus the first-boot
-      initialization for control-plane nodes, selected by the `osProfile` on
-      `controlPlaneConfig`; and a NodePoolRelease, a MachineImage plus the
-      first-boot initialization for worker nodes, selected by the `osProfile` on
-      a node pool. Releases are immutable: a release name always identifies the
-      same image and initialization. A deprecated release keeps working for node
-      pools and control planes already using it, including scale-up, but is not
-      offered as a target for new changes. The Operator manages the catalog with
-      `nkectl`; catalog management is not part of this REST API. Changing
-      `osProfile` on a node pool or on the control plane triggers a rollout of
-      the affected nodes to the new release.
+      **OS profiles (`osProfile`).** The OS and first-boot configuration for
+      every node come from an OS profile the Operator supplies to the management
+      plane, together with a config profile for the node's role. Control-plane
+      and node pool requests select them by name in `nico.osProfile` and
+      `nico.configProfile`. Changing `osProfile` on a node pool or on the control
+      plane triggers a rollout of the affected nodes to the new profile.
   - name: Node pools
     description: |
-      A group of worker nodes sharing an instance type, OS release and
+      A group of worker nodes sharing an instance type, OS profile and
       Kubernetes version. Node pool names are unique within a cluster. The
       configuration history of a node pool is an ordered list of snapshots of
       its configuration changes.
@@ -273,7 +263,7 @@ paths:
                   instanceTypePreference: [1c3e5a7f-9b1d-4f3e-a5c7-e9b1d3f5a7c9]
                   vpcPrefixIDs: [2d4f6b8a-0c2e-4a4f-b6d8-f0c2e4a6b8d0]
                   sshKeyGroupIDs: [3e5a7c9b-1d3f-4b5a-c7e9-a1d3f5b7c9e1]
-                  osProfile: nke-260625-24.04-x86-fde
+                  osProfile: example-ubuntu-24.04-amd64
                   configProfile: example-control-plane
               nodePools:
                 - name: gpu-workers
@@ -286,7 +276,7 @@ paths:
                     instanceTypeID: 0d2f4a6c-8e0b-4d2f-9a4c-6e8b0d2f4a6c
                     vpcPrefixIDs: [2d4f6b8a-0c2e-4a4f-b6d8-f0c2e4a6b8d0]
                     sshKeyGroupIDs: [3e5a7c9b-1d3f-4b5a-c7e9-a1d3f5b7c9e1]
-                    osProfile: nke-260625-24.04-x86-fde
+                    osProfile: example-ubuntu-24.04-amd64
                     configProfile: example-worker
       responses:
         "201":
@@ -371,12 +361,12 @@ paths:
                 value:
                   enableOidc: true
               controlPlaneChange:
-                summary: Resize the control plane and move it to a new OS release
+                summary: Resize the control plane and move it to a new OS profile
                 value:
                   controlPlaneConfig:
                     desiredCount: 5
                     nico:
-                      osProfile: nke-260701-24.04-x86-fde
+                      osProfile: example-ubuntu-24.04-amd64-r2
       responses:
         "200":
           description: Update accepted
@@ -556,7 +546,7 @@ paths:
                 instanceTypeID: 9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b
                 vpcPrefixIDs: [2d4f6b8a-0c2e-4a4f-b6d8-f0c2e4a6b8d0]
                 sshKeyGroupIDs: [3e5a7c9b-1d3f-4b5a-c7e9-a1d3f5b7c9e1]
-                osProfile: nke-260625-24.04-x86-fde
+                osProfile: example-ubuntu-24.04-amd64
                 configProfile: example-worker
                 diskSelectionStrategy: largest
       responses:
@@ -617,7 +607,7 @@ paths:
       summary: Update a node pool
       operationId: updateNodePool
       description: |
-        All fields are optional. Changes to the Kubernetes version, OS release
+        All fields are optional. Changes to the Kubernetes version, OS profile
         or other node configuration create a new NodeSet and roll the pool's
         nodes to it.
 
@@ -642,10 +632,10 @@ paths:
                   maxSurge: 2
                   recycleBudget: 2
               newRelease:
-                summary: Move to a new OS release and restore the default kube-reserved memory
+                summary: Move to a new OS profile and restore the default kube-reserved memory
                 value:
                   nico:
-                    osProfile: nke-260701-24.04-x86-fde
+                    osProfile: example-ubuntu-24.04-amd64-r2
                   kubeReservedMemory: ''
       responses:
         "200":
@@ -1737,7 +1727,7 @@ components:
             - $ref: "#/components/schemas/InfraNodePoolProviderUpdate"
           description: The mutable Infra provider node pool fields.
     NodePool:
-      description: A group of worker nodes sharing an instance type, OS release and Kubernetes version.
+      description: A group of worker nodes sharing an instance type, OS profile and Kubernetes version.
       type: object
       required:
         - id
@@ -2142,7 +2132,7 @@ components:
     ControlPlaneRolloutStatus:
       type: object
       description: |
-        Control-plane nodes only. Drift is computed on the OS release (osProfile) and
+        Control-plane nodes only. Drift is computed on the OS profile (osProfile) and
         the Kubernetes version. Resolve pinnedConfigurationID and desiredConfigurationID
         with GET /clusters/{clusterID}/control-plane/configHistory.
       required:
@@ -2160,8 +2150,7 @@ components:
         changes:
           type: array
           description: |
-            Each with field, from, to as plain strings. Drift is computed on the OS release
-            (osProfile) and the Kubernetes version.
+            Each with field, from, to as plain strings. Drift is computed on the OS profile (osProfile) and the Kubernetes version.
           items:
             $ref: "#/components/schemas/ControlPlaneRolloutChange"
           x-go-type-skip-optional-pointer: true
@@ -2681,8 +2670,8 @@ components:
           description: SSH key groups for node access. Fixed at creation.
         osProfile:
           type: string
-          description: Name of a NodePoolRelease from the Operator's release catalog.
-          example: nke-260625-24.04-x86-fde
+          description: Name of an OS profile the Operator has supplied to the management plane.
+          example: example-ubuntu-24.04-amd64
           x-go-name: OSProfile
           x-go-type-skip-optional-pointer: true
         configProfile:
@@ -2717,8 +2706,8 @@ components:
         osProfile:
           type: string
           description: |
-            Name of a NodePoolRelease. Changing it rolls the pool's nodes to the new
-            release. An empty string is rejected: a pool always has an OS release.
+            Name of an OS profile. Changing it rolls the pool's nodes to the new profile. An
+            empty string is rejected: a pool always has an OS profile.
           x-go-name: OSProfile
         configProfile:
           type: string
@@ -2749,8 +2738,8 @@ components:
           x-go-type-skip-optional-pointer: true
         osProfile:
           type: string
-          description: Name of a NodePoolRelease from the Operator's release catalog.
-          example: nke-260625-24.04-x86-fde
+          description: Name of an OS profile the Operator has supplied to the management plane.
+          example: example-ubuntu-24.04-amd64
           x-go-name: OSProfile
           x-go-type-skip-optional-pointer: true
         configProfile:
@@ -2866,8 +2855,8 @@ components:
           x-go-type-skip-optional-pointer: true
         osProfile:
           type: string
-          description: Name of a ClusterRelease from the Operator's release catalog.
-          example: nke-260625-24.04-x86-fde
+          description: Name of an OS profile the Operator has supplied to the management plane.
+          example: example-ubuntu-24.04-amd64
           x-go-name: OSProfile
           x-go-type-skip-optional-pointer: true
         diskSelectionStrategy:
@@ -2917,8 +2906,8 @@ components:
           x-go-type-skip-optional-pointer: true
         osProfile:
           type: string
-          description: Name of a ClusterRelease from the Operator's release catalog.
-          example: nke-260625-24.04-x86-fde
+          description: Name of an OS profile the Operator has supplied to the management plane.
+          example: example-ubuntu-24.04-amd64
           x-go-name: OSProfile
           x-go-type-skip-optional-pointer: true
         configProfile:
@@ -2963,7 +2952,7 @@ components:
           x-go-type-skip-optional-pointer: true
         osProfile:
           type: string
-          description: Name of a ClusterRelease. Changing it starts a control-plane rollout.
+          description: Name of an OS profile. Changing it starts a control-plane rollout.
           x-go-name: OSProfile
         configProfile:
           type: string

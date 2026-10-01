@@ -266,7 +266,7 @@ type ControlPlaneRolloutChange struct {
 	To string `json:"to"`
 }
 
-// ControlPlaneRolloutStatus Control-plane nodes only. Drift is computed on the OS release (osProfile) and
+// ControlPlaneRolloutStatus Control-plane nodes only. Drift is computed on the OS profile (osProfile) and
 // the Kubernetes version. Resolve pinnedConfigurationID and desiredConfigurationID
 // with GET /clusters/{clusterID}/control-plane/configHistory.
 type ControlPlaneRolloutStatus struct {
@@ -276,8 +276,7 @@ type ControlPlaneRolloutStatus struct {
 	// Actionable The node can be replaced now.
 	Actionable bool `json:"actionable"`
 
-	// Changes Each with field, from, to as plain strings. Drift is computed on the OS release
-	// (osProfile) and the Kubernetes version.
+	// Changes Each with field, from, to as plain strings. Drift is computed on the OS profile (osProfile) and the Kubernetes version.
 	Changes []ControlPlaneRolloutChange `json:"changes,omitempty"`
 
 	// PinnedConfigurationID Configuration the node was built from.
@@ -636,7 +635,7 @@ type NicoControlPlaneProvider struct {
 	// InstanceTypePreference Ordered list of acceptable NICo instance types; index 0 is the highest priority.
 	InstanceTypePreference []openapi_types.UUID `json:"instanceTypePreference,omitempty"`
 
-	// OSProfile Name of a ClusterRelease from the Operator's release catalog.
+	// OSProfile Name of an OS profile the Operator has supplied to the management plane.
 	OSProfile string `json:"osProfile,omitempty"`
 
 	// SSHKeyGroupIDs SSH key groups for node access. Can be updated.
@@ -658,7 +657,7 @@ type NicoControlPlaneProviderCreate struct {
 	// InstanceTypePreference Ordered list of acceptable NICo instance types; index 0 is the highest priority.
 	InstanceTypePreference []openapi_types.UUID `json:"instanceTypePreference,omitempty"`
 
-	// OSProfile Name of a ClusterRelease from the Operator's release catalog.
+	// OSProfile Name of an OS profile the Operator has supplied to the management plane.
 	OSProfile string `json:"osProfile,omitempty"`
 
 	// SSHKeyGroupIDs SSH key groups for node access. Can be updated.
@@ -680,7 +679,7 @@ type NicoControlPlaneProviderUpdate struct {
 	// InstanceTypePreference Ordered list of acceptable NICo instance types; index 0 is the highest priority.
 	InstanceTypePreference []openapi_types.UUID `json:"instanceTypePreference,omitempty"`
 
-	// OSProfile Name of a ClusterRelease. Changing it starts a control-plane rollout.
+	// OSProfile Name of an OS profile. Changing it starts a control-plane rollout.
 	OSProfile *string `json:"osProfile,omitempty"`
 
 	// SSHKeyGroupIDs SSH key groups for node access. Can be updated.
@@ -711,7 +710,7 @@ type NicoNodePoolProvider struct {
 	// NvLinkLogicalPartitionID NVLink logical partition. Fixed at creation.
 	NvLinkLogicalPartitionID *openapi_types.UUID `json:"nvLinkLogicalPartitionID,omitempty"`
 
-	// OSProfile Name of a NodePoolRelease from the Operator's release catalog.
+	// OSProfile Name of an OS profile the Operator has supplied to the management plane.
 	OSProfile string `json:"osProfile,omitempty"`
 
 	// SSHKeyGroupIDs SSH key groups for node access. Fixed at creation.
@@ -735,8 +734,8 @@ type NicoNodePoolProviderUpdate struct {
 	// DiskSelectionStrategy Which disk the OS is installed on. Default smallest.
 	DiskSelectionStrategy *DiskSelectionStrategy `json:"diskSelectionStrategy,omitempty"`
 
-	// OSProfile Name of a NodePoolRelease. Changing it rolls the pool's nodes to the new
-	// release. An empty string is rejected: a pool always has an OS release.
+	// OSProfile Name of an OS profile. Changing it rolls the pool's nodes to the new profile. An
+	// empty string is rejected: a pool always has an OS profile.
 	OSProfile *string `json:"osProfile,omitempty"`
 
 	// SubnetIDs Replaces the list; [] clears it. Subnets, for sites without native networking.
@@ -766,7 +765,7 @@ type NicoNodeSetProvider struct {
 	// DiskSelectionStrategy Which disk the OS is installed on. Default smallest.
 	DiskSelectionStrategy DiskSelectionStrategyCreate `json:"diskSelectionStrategy,omitempty"`
 
-	// OSProfile Name of a NodePoolRelease from the Operator's release catalog.
+	// OSProfile Name of an OS profile the Operator has supplied to the management plane.
 	OSProfile string `json:"osProfile,omitempty"`
 
 	// SubnetIDs Subnets, for sites without native networking.
@@ -921,7 +920,7 @@ type NodeHistoryWorkflow struct {
 // Maximum prefix length depends on cluster name length.
 type NodeNamePrefix = string
 
-// NodePool A group of worker nodes sharing an instance type, OS release and Kubernetes version.
+// NodePool A group of worker nodes sharing an instance type, OS profile and Kubernetes version.
 type NodePool struct {
 	// ID Node pool ID.
 	ID openapi_types.UUID `json:"id"`
