@@ -517,8 +517,21 @@ CWE_IMAGE="cwe-e2e:${git_short_sha}"
 CWE_BUILD_VERSION="e2e-${git_short_sha}"
 CWE_PROFILES_TILT_IMAGE="docker.local/cwe-profiles:tilt"
 
+# Docker Hub rate-limits anonymous pulls per egress IP and the arm64 runners
+# share one, so with NKE_E2E_DOCKERHUB_MIRROR set the host builds take their
+# base images from the mirror. Same tags and digests, so the pins still hold.
+mirror_build_args=()
+if [[ -n "${NKE_E2E_DOCKERHUB_MIRROR:-}" ]]; then
+  mirror_build_args+=(--build-arg "BASE_REGISTRY=${NKE_E2E_DOCKERHUB_MIRROR}")
+  for arg in GOLANG_IMAGE ALPINE_IMAGE; do
+    pin="$(sed -nE "s#^ARG ${arg}=docker\.io/(.*)\$#\1#p" "${CONTROLLER_ROOT}/Dockerfile")"
+    [[ -n "${pin}" ]] && mirror_build_args+=(--build-arg "${arg}=${NKE_E2E_DOCKERHUB_MIRROR}/${pin}")
+  done
+fi
+
 log "building the profiles fixture image ${CWE_PROFILES_TILT_IMAGE}"
 docker build --platform "linux/${host_arch}" \
+  ${mirror_build_args[@]+"${mirror_build_args[@]}"} \
   --file test/fixtures/Dockerfile --tag "${CWE_PROFILES_TILT_IMAGE}" test/fixtures \
   >"${STATE_DIR}/profiles-image-build.log" 2>&1 ||
   { tail -n 40 "${STATE_DIR}/profiles-image-build.log" >&2; fail "building the profiles image failed"; }
@@ -528,6 +541,7 @@ DOCKER_BUILDKIT=1 docker build --platform "linux/${host_arch}" \
   --file "${CONTROLLER_ROOT}/Dockerfile" \
   --build-arg "BUILD_VERSION=${CWE_BUILD_VERSION}" \
   --build-arg "GIT_VERSION=${git_sha}" \
+  ${mirror_build_args[@]+"${mirror_build_args[@]}"} \
   --tag "${CWE_IMAGE}" "${WORKSPACE_ROOT}" \
   >"${STATE_DIR}/cwe-image-build.log" 2>&1 ||
   { tail -n 60 "${STATE_DIR}/cwe-image-build.log" >&2; fail "building the controller image failed"; }

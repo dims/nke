@@ -138,6 +138,9 @@ jobs:
       CAPNICO_SOURCE_DIR: ${{ github.workspace }}/.capnico/cluster-api-provider-nico
       KIND_CLUSTER_NAME: cwe-nico-vms
       NKE_E2E_RUN_ID: github-nico-vms-${{ github.run_id }}-${{ github.run_attempt }}
+      # Host image builds pull their base images from here instead of Docker
+      # Hub, whose anonymous limit the shared arm64 egress IP keeps hitting.
+      NKE_E2E_DOCKERHUB_MIRROR: mirror.gcr.io
       # Per leg, from the matrix above: both run happy-path and multi-pod-cidrs,
       # arm64 additionally runs parallel-lifecycle and ovn. A dispatch
       # label-filter still overrides both. Its default has to stay empty:
