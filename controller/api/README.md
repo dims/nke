@@ -50,6 +50,22 @@ If you forget, CI fails. `make -C controller generate-check` regenerates and the
 fails if the committed output differs, and the merge gate runs it. The failure
 names the files that are out of date.
 
+## Rendering the reference
+
+Fern renders `openapi.yaml` into the REST API Reference tab of the documentation
+site (`fern/generators.yml`, `docs/index.yml`). For one self-contained page, to
+review a change or to hand to a customer:
+
+```bash
+make -C controller/api docs    # writes controller/.local/api-reference.html; needs Node
+```
+
+Both honour `x-fern-ignore`: Fern reads it directly, and `redocly.yaml` tells
+Redocly to drop the same elements before rendering. The `API docs` workflow
+builds this page for every pull request that touches the spec or the docs and
+attaches it as the `api-reference` artifact. On `main` it also runs `fern check`
+and publishes the site once `FERN_TOKEN` is configured.
+
 ## Checks
 
 ```bash
