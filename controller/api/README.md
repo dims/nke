@@ -46,6 +46,12 @@ provider, `teleportEnabled`, the legacy `controlPlane` node-pool flag, and the
 Commit the changed `*.gen.go` files with the specification change. They are
 checked in on purpose, so that consumers do not need the generator.
 
+The target runs the generator with the Go toolchain this module's `go.mod`
+declares, which is the one CI uses. The copy of the spec embedded in
+`server.gen.go` is gzip-compressed and the compressed bytes differ between Go
+releases, so generating with the workspace's newer toolchain would produce a
+blob the gate rejects.
+
 If you forget, CI fails. `make -C controller generate-check` regenerates and then
 fails if the committed output differs, and the merge gate runs it. The failure
 names the files that are out of date.
