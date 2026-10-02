@@ -6,9 +6,6 @@ tabs:
     display-name: Documentation
   api:
     display-name: REST API Reference
-    # The api item below already contributes "rest-api-reference" to the path;
-    # without this the URL repeats it.
-    skip-slug: true
 
 navigation:
   - tab: documentation
@@ -98,6 +95,9 @@ navigation:
         # The tab already carries the title, so do not nest a second
         # "REST API Reference" level (and path segment) under it.
         flattened: true
+        # The tab already contributes "rest-api-reference" to the path; without
+        # this the URL repeats it.
+        skip-slug: true
         # Sections in reading order rather than in order of first appearance
         # in openapi.yaml, which would put Catalog first.
         layout:
