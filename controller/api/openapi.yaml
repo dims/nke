@@ -1065,9 +1065,7 @@ components:
           description: Enable Teleport SSH enrollment for nodes in this cluster. When omitted, the server-side default for the site is applied.
           x-order: 10
         network:
-          allOf:
-            - $ref: "#/components/schemas/ClusterNetworkCreateConfig"
-          description: Pod and service network. Immutable after creation. Defaults apply when omitted.
+          $ref: "#/components/schemas/ClusterNetworkCreateConfig"
         nodePools:
           type: array
           items:
@@ -1083,21 +1081,12 @@ components:
                 instanceTypeID: "123e4567-e89b-12d3-a456-426614174001"
           x-order: 12
         controlPlaneConfig:
-          allOf:
-            - $ref: "#/components/schemas/CreateClusterControlPlaneConfig"
-          description: Control-plane configuration. Required when you create a cluster.
+          $ref: "#/components/schemas/CreateClusterControlPlaneConfig"
         nico:
-          allOf:
-            - $ref: "#/components/schemas/NicoClusterProvider"
-          description: NICo identifiers for the cluster.
+          $ref: "#/components/schemas/NicoClusterProvider"
         infra:
           x-fern-ignore: true
-          allOf:
-            - $ref: "#/components/schemas/InfraClusterProvider"
-          description: |
-            CAPI infrastructure payload, the alternative to `nico` for a cluster whose
-            CAPI manifests the caller supplies. Exactly one of `nico` and `infra` is
-            required; a request carrying both, or neither, is rejected with 400.
+          $ref: "#/components/schemas/InfraClusterProvider"
     ControlPlaneConfig:
       type: object
       additionalProperties: false
@@ -1232,6 +1221,7 @@ components:
                   required: [infra]
       description: |
         Writable cluster-level control plane configuration supplied at cluster creation.
+        Required when you create a cluster.
         `nico` carries the NICo settings for the control-plane nodes; it is required
         for a NICo cluster.
       properties:
@@ -1264,14 +1254,10 @@ components:
           type: boolean
           description: Whether Teleport SSH enrollment is enabled for control plane nodes. When omitted, the server-side default for the site is applied.
         nico:
-          allOf:
-            - $ref: "#/components/schemas/NicoControlPlaneProviderCreate"
-          description: NICo settings for control-plane nodes.
+          $ref: "#/components/schemas/NicoControlPlaneProviderCreate"
         infra:
           x-fern-ignore: true
-          allOf:
-            - $ref: "#/components/schemas/InfraControlPlaneProvider"
-          description: Infra provider control plane fields.
+          $ref: "#/components/schemas/InfraControlPlaneProvider"
     UpdateClusterControlPlaneConfig:
       type: object
       additionalProperties: false
@@ -1306,14 +1292,10 @@ components:
           type: boolean
           description: Enable or disable Teleport SSH enrollment for control plane nodes.
         nico:
-          allOf:
-            - $ref: "#/components/schemas/NicoControlPlaneProviderUpdate"
-          description: NICo settings for control-plane nodes.
+          $ref: "#/components/schemas/NicoControlPlaneProviderUpdate"
         infra:
           x-fern-ignore: true
-          allOf:
-            - $ref: "#/components/schemas/InfraControlPlaneProviderUpdate"
-          description: The mutable infra provider control plane fields.
+          $ref: "#/components/schemas/InfraControlPlaneProviderUpdate"
     Cluster:
       description: |
         A Kubernetes cluster. Holds the Kubernetes version, network, CNI, etcd
@@ -1434,11 +1416,7 @@ components:
             Cannot be combined with a control-plane upgrade or etcd enablement. Other
             updates return 409 while it runs.
         controlPlaneConfig:
-          allOf:
-            - $ref: "#/components/schemas/UpdateClusterControlPlaneConfig"
-          description: |
-            Control-plane changes. Changes to `osProfile` or the Kubernetes version start a
-            control-plane rollout.
+          $ref: "#/components/schemas/UpdateClusterControlPlaneConfig"
         network:
           allOf:
             - $ref: "#/components/schemas/ClusterNetworkCreateConfig"
@@ -1450,7 +1428,7 @@ components:
     ClusterNetworkCreateConfig:
       type: object
       additionalProperties: false
-      description: Pod and service network. Immutable after creation.
+      description: Pod and service network. Immutable after creation. Defaults apply when omitted.
       properties:
         podCIDR:
           type: string
@@ -1589,9 +1567,7 @@ components:
           example: "gpu-workers"
           x-order: 1
         nodeNamePrefix:
-          allOf:
-            - $ref: "#/components/schemas/NodeNamePrefix"
-          description: Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
+          $ref: "#/components/schemas/NodeNamePrefix"
         systemReservedMemory:
           type: string
           description: Memory reserved for system daemons. Nodes reserve 16Gi when omitted.
@@ -1652,17 +1628,10 @@ components:
           description: Whether Teleport SSH enrollment is enabled for nodes in this pool. When omitted, the server-side default for the site is applied based on pool role.
           x-order: 20
         nico:
-          allOf:
-            - $ref: "#/components/schemas/NicoNodePoolProvider"
-          description: NICo settings for the pool.
+          $ref: "#/components/schemas/NicoNodePoolProvider"
         infra:
           x-fern-ignore: true
-          allOf:
-            - $ref: "#/components/schemas/InfraNodePoolProvider"
-          description: |
-            CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
-            of `nico` and `infra` is required; a request carrying both, or neither, is
-            rejected with 400.
+          $ref: "#/components/schemas/InfraNodePoolProvider"
     UpdateNodePoolRequest:
       type: object
       additionalProperties: false
@@ -1718,14 +1687,10 @@ components:
             Desired Kubernetes version for the pool's nodes, as X.Y.Z with no leading "v".
             Must be newer than the current version.
         nico:
-          allOf:
-            - $ref: "#/components/schemas/NicoNodePoolProviderUpdate"
-          description: NICo settings for the pool.
+          $ref: "#/components/schemas/NicoNodePoolProviderUpdate"
         infra:
           x-fern-ignore: true
-          allOf:
-            - $ref: "#/components/schemas/InfraNodePoolProviderUpdate"
-          description: The mutable Infra provider node pool fields.
+          $ref: "#/components/schemas/InfraNodePoolProviderUpdate"
     NodePool:
       description: A group of worker nodes sharing an instance type, OS profile and Kubernetes version.
       type: object
@@ -2317,9 +2282,7 @@ components:
       type: object
       properties:
         machineHealthIssue:
-          allOf:
-            - $ref: "#/components/schemas/MachineHealthIssue"
-          description: Flags the underlying machine for repair.
+          $ref: "#/components/schemas/MachineHealthIssue"
         forceUnreachable:
           type: boolean
           default: false

@@ -152,7 +152,7 @@ type ClusterNetwork struct {
 	ServiceCIDR string `json:"serviceCIDR"`
 }
 
-// ClusterNetworkCreateConfig Pod and service network. Immutable after creation.
+// ClusterNetworkCreateConfig Pod and service network. Immutable after creation. Defaults apply when omitted.
 type ClusterNetworkCreateConfig struct {
 	// PodCIDR Comma-separated IPv4 pod CIDRs. Each must be private, with a prefix length from
 	// /12 to /23, and must not overlap the others or the service CIDR. Must have room
@@ -336,19 +336,21 @@ type ControlPlaneStatus struct {
 }
 
 // CreateClusterControlPlaneConfig Writable cluster-level control plane configuration supplied at cluster creation.
+// Required when you create a cluster.
 // `nico` carries the NICo settings for the control-plane nodes; it is required
 // for a NICo cluster.
 type CreateClusterControlPlaneConfig struct {
 	// DesiredCount Number of control-plane nodes.
 	DesiredCount int `json:"desiredCount"`
 
-	// Infra Infra provider control plane fields.
+	// Infra Infra provider fields for cluster-level control plane configuration. Mutually exclusive with `nico`.
 	Infra *InfraControlPlaneProvider `json:"infra,omitempty"`
 
 	// MaxSurge Extra control-plane nodes allowed during a rollout (0 or 1).
 	MaxSurge *int `json:"maxSurge,omitempty"`
 
-	// Nico NICo settings for control-plane nodes.
+	// Nico NICo settings for control-plane nodes at creation. osProfile and configProfile
+	// are required, and exactly one of subnetIDs and vpcPrefixIDs.
 	Nico *NicoControlPlaneProviderCreate `json:"nico,omitempty"`
 
 	// NodeLabels Labels applied to control-plane nodes, as key=value.
@@ -390,18 +392,21 @@ type CreateClusterRequest struct {
 	// TeleportEnabled Enable Teleport SSH enrollment for nodes in this cluster. When omitted, the server-side default for the site is applied.
 	TeleportEnabled *bool `json:"teleportEnabled,omitempty"`
 
-	// ControlPlaneConfig Control-plane configuration. Required when you create a cluster.
+	// ControlPlaneConfig Writable cluster-level control plane configuration supplied at cluster creation.
+	// Required when you create a cluster.
+	// `nico` carries the NICo settings for the control-plane nodes; it is required
+	// for a NICo cluster.
 	ControlPlaneConfig *CreateClusterControlPlaneConfig `json:"controlPlaneConfig,omitempty"`
 
-	// Infra CAPI infrastructure payload, the alternative to `nico` for a cluster whose
-	// CAPI manifests the caller supplies. Exactly one of `nico` and `infra` is
-	// required; a request carrying both, or neither, is rejected with 400.
+	// Infra CAPI infrastructure fields for a cluster: the caller supplies the CAPI manifests
+	// directly. Not to be used merely because a cluster is provisioned through CAPI —
+	// `nico` clusters may be too. Mutually exclusive with `nico`.
 	Infra *InfraClusterProvider `json:"infra,omitempty"`
 
 	// Network Pod and service network. Immutable after creation. Defaults apply when omitted.
 	Network *ClusterNetworkCreateConfig `json:"network,omitempty"`
 
-	// Nico NICo identifiers for the cluster.
+	// Nico NICo identifiers for the cluster. Fixed at creation.
 	Nico *NicoClusterProvider `json:"nico,omitempty"`
 
 	// NodePools Initial worker node pools.
@@ -437,15 +442,17 @@ type CreateNodePoolRequest struct {
 	// AutoProvisionDisabled Disables automatic provisioning for the pool.
 	AutoProvisionDisabled *bool `json:"autoProvisionDisabled,omitempty"`
 
-	// Infra CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
-	// of `nico` and `infra` is required; a request carrying both, or neither, is
-	// rejected with 400.
+	// Infra Infra provider fields for a node pool. Mutually exclusive with `nico`.
 	Infra *InfraNodePoolProvider `json:"infra,omitempty"`
 
-	// Nico NICo settings for the pool.
+	// Nico NICo settings for a node pool. instanceTypeID, osProfile and configProfile are
+	// required, and exactly one of subnetIDs and vpcPrefixIDs.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
-	// NodeNamePrefix Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
+	// NodeNamePrefix Prefix for generated node names: `<cluster name>-<nodeNamePrefix>-<suffix>`.
+	// CWE assigns suffix as a 4-digit decimal number (0000–9999).
+	// Generated names must fit within 63 characters (Kubernetes Node name limit).
+	// Maximum prefix length depends on cluster name length.
 	NodeNamePrefix NodeNamePrefix `json:"nodeNamePrefix"`
 
 	// AutoModeDisabled Disables auto-mode (automatic node recycling).
@@ -1056,15 +1063,17 @@ type NodePoolCreateConfig struct {
 	// Description Free-text description.
 	Description *string `json:"description,omitempty"`
 
-	// Infra CAPI infrastructure payload, for a cluster created with `infra`. Exactly one
-	// of `nico` and `infra` is required; a request carrying both, or neither, is
-	// rejected with 400.
+	// Infra Infra provider fields for a node pool. Mutually exclusive with `nico`.
 	Infra *InfraNodePoolProvider `json:"infra,omitempty"`
 
-	// Nico NICo settings for the pool.
+	// Nico NICo settings for a node pool. instanceTypeID, osProfile and configProfile are
+	// required, and exactly one of subnetIDs and vpcPrefixIDs.
 	Nico *NicoNodePoolProvider `json:"nico,omitempty"`
 
-	// NodeNamePrefix Node names are `<cluster>-<prefix>-<NNNN>` (four-digit suffix), at most 63 characters in total.
+	// NodeNamePrefix Prefix for generated node names: `<cluster name>-<nodeNamePrefix>-<suffix>`.
+	// CWE assigns suffix as a 4-digit decimal number (0000–9999).
+	// Generated names must fit within 63 characters (Kubernetes Node name limit).
+	// Maximum prefix length depends on cluster name length.
 	NodeNamePrefix NodeNamePrefix `json:"nodeNamePrefix"`
 
 	// AutoProvisionDisabled Disables automatic provisioning for the pool.
@@ -1126,13 +1135,16 @@ type UpdateClusterControlPlaneConfig struct {
 	// DesiredCount Number of control-plane nodes.
 	DesiredCount *int `json:"desiredCount,omitempty"`
 
-	// Infra The mutable infra provider control plane fields.
+	// Infra The mutable infra provider control plane fields. Every field carries three states: omitted
+	// leaves the stored value alone, a value replaces it, and an empty value clears it.
+	// Mutually exclusive with `nico`: a request carrying both is rejected with 400.
 	Infra *InfraControlPlaneProviderUpdate `json:"infra,omitempty"`
 
 	// MaxSurge Extra control-plane nodes allowed during a rollout (0 or 1).
 	MaxSurge *int `json:"maxSurge,omitempty"`
 
-	// Nico NICo settings for control-plane nodes.
+	// Nico Each field has three states: omitted leaves the stored value, a value replaces
+	// it, and an empty value clears it. Clearing a required field is rejected.
 	Nico *NicoControlPlaneProviderUpdate `json:"nico,omitempty"`
 
 	// NodeLabels Replaces the existing labels.
@@ -1150,8 +1162,9 @@ type UpdateClusterControlPlaneConfig struct {
 
 // UpdateClusterRequest Changes to a cluster. All fields are optional; unknown fields are rejected.
 type UpdateClusterRequest struct {
-	// ControlPlaneConfig Control-plane changes. Changes to `osProfile` or the Kubernetes version start a
-	// control-plane rollout.
+	// ControlPlaneConfig Changes to `osProfile` or the Kubernetes version start a control-plane
+	// rollout. All fields are optional. A provider payload that does not match the
+	// cluster's provider is rejected with 400.
 	ControlPlaneConfig *UpdateClusterControlPlaneConfig `json:"controlPlaneConfig,omitempty"`
 
 	// ControlPlaneKubernetesVersion Target control-plane version, as X.Y.Z with no leading "v". Must be newer than
@@ -1210,7 +1223,9 @@ type UpdateNodePoolRequest struct {
 	// DesiredNodeCount Number of nodes.
 	DesiredNodeCount *int `json:"desiredNodeCount,omitempty"`
 
-	// Infra The mutable Infra provider node pool fields.
+	// Infra The mutable infra provider node pool fields. Every field carries three states: omitted
+	// leaves the stored value alone, a value replaces it, and an empty value clears it.
+	// Mutually exclusive with `nico`: a request carrying both is rejected with 400.
 	Infra *InfraNodePoolProviderUpdate `json:"infra,omitempty"`
 
 	// KubeReservedMemory Memory reserved for Kubernetes components. An empty string restores the 2Gi default.
@@ -1224,7 +1239,9 @@ type UpdateNodePoolRequest struct {
 	// node is torn down before its replacement is provisioned.
 	MaxSurge *int `json:"maxSurge,omitempty"`
 
-	// Nico NICo settings for the pool.
+	// Nico Fields fixed at creation (instanceTypeID, partitions, sshKeyGroupIDs) cannot be
+	// sent: a request carrying one is rejected with 400. A body echoed from GET must
+	// have them stripped.
 	Nico *NicoNodePoolProviderUpdate `json:"nico,omitempty"`
 
 	// ProvisioningMonitorDisabled When true, nodes stuck in provisioning past the timeout are not recycled automatically.

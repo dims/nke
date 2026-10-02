@@ -76,8 +76,14 @@ make -C controller/api test
 `lint` also runs `lint-spec`, which lints `openapi.yaml` with vacuum against
 `openapi-lint.yaml` and fails the merge gate on any finding: every operation,
 parameter, schema and property must carry a description, every example must
-match its schema, and a description must not sit beside a bare `$ref` (wrap the
-`$ref` in `allOf`; Redoc, Swagger UI and the generator ignore `$ref` siblings).
+match its schema, and a description must not sit beside a bare `$ref`, because
+Redoc, Swagger UI and the generator ignore `$ref` siblings. Put the text on the
+referenced schema. In a response schema the `$ref` may instead be wrapped in
+`allOf`; request schemas must not do that, because kin-openapi then reports a
+validation failure inside the property as a raw schema dump instead of the
+one-line request-body error. The `infra` properties of the request schemas
+carry `x-fern-ignore` beside their `$ref` on purpose; `openapi-lint-ignore.yaml`
+lists them so the rule stays an error everywhere else.
 The rules, and why each is on or off, are commented in the ruleset.
 
 This module has **no test files**. `make test` therefore compiles the module and

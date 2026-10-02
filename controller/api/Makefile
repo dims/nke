@@ -59,7 +59,7 @@ docs: ## Render openapi.yaml into one HTML page with Redocly, minus the x-fern-i
 	@echo "Rendered $(API_DOCS_OUT)"
 
 lint-spec: ## Lint openapi.yaml against openapi-lint.yaml.
-	$(GO) run github.com/daveshanley/vacuum@$(VACUUM_VERSION) lint --ruleset openapi-lint.yaml --details --no-banner --no-style --no-clip --min-score 0 openapi.yaml
+	$(GO) run github.com/daveshanley/vacuum@$(VACUUM_VERSION) lint --ruleset openapi-lint.yaml --ignore-file openapi-lint-ignore.yaml --details --no-banner --no-style --no-clip --min-score 0 openapi.yaml
 
 test: ## Run this module's tests.
 	$(GO) test $(GO_TEST_FLAGS) ./...
