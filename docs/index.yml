@@ -89,3 +89,6 @@ navigation:
   - tab: api
     layout:
       - api: REST API Reference
+        # Render each tag's description from controller/api/openapi.yaml as the
+        # section intro, so the concept text ships with the reference.
+        tag-description-pages: true
