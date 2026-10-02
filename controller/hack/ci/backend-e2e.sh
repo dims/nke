@@ -730,10 +730,25 @@ CWE_PROFILES_TILT_IMAGE="docker.local/cwe-profiles:tilt"
 CAPD_REBOOT_IMAGE="ko.local/capd-reboot-controller"
 DSX_IDENTITY_EXCHANGE_IMAGE=""
 
+# Docker Hub rate-limits anonymous pulls per egress IP and the arm64 runners
+# share one, so the host builds here route their base images through the same
+# mirror the management cluster uses. The digests are unchanged, so the pins
+# in the Dockerfiles still hold. mirror.gcr.io serves both the library/ and
+# the bare path.
+mirror_build_args=()
+if [[ -n "${DOCKERHUB_MIRROR}" ]]; then
+  mirror_build_args+=(--build-arg "BASE_REGISTRY=${DOCKERHUB_MIRROR}")
+  for arg in GOLANG_IMAGE ALPINE_IMAGE; do
+    pin="$(sed -nE "s#^ARG ${arg}=docker\.io/(.*)\$#\1#p" "${CONTROLLER_ROOT}/Dockerfile")"
+    [[ -n "${pin}" ]] && mirror_build_args+=(--build-arg "${arg}=${DOCKERHUB_MIRROR}/${pin}")
+  done
+fi
+
 log "building the sanitized profiles fixture image"
 docker build \
   --platform "linux/${host_arch}" \
   --file test/fixtures/Dockerfile \
+  ${mirror_build_args[@]+"${mirror_build_args[@]}"} \
   --tag "${CWE_PROFILES_TILT_IMAGE}" \
   test/fixtures
 printf '%s\n' "${CWE_PROFILES_TILT_IMAGE}" >"${STATE_DIR}/cwe-profiles-image-ref.txt"
@@ -745,6 +760,7 @@ DOCKER_BUILDKIT=1 docker build \
   --file "${CONTROLLER_ROOT}/Dockerfile" \
   --build-arg "BUILD_VERSION=${CWE_BUILD_VERSION}" \
   --build-arg "GIT_VERSION=${git_sha}" \
+  ${mirror_build_args[@]+"${mirror_build_args[@]}"} \
   --tag "${CWE_IMAGE}" \
   "${WORKSPACE_ROOT}"
 printf '%s\n' "${CWE_IMAGE}" >"${STATE_DIR}/cwe-image-ref.txt"
@@ -756,6 +772,7 @@ if [[ "${DSX_IDENTITY_EXCHANGE_ENABLED}" == "true" ]]; then
   DOCKER_BUILDKIT=1 docker build \
     --platform "linux/${host_arch}" \
     --file "${CONTROLLER_ROOT}/hack/dsx-identity-exchange-mock/Dockerfile" \
+    ${mirror_build_args[@]+"${mirror_build_args[@]}"} \
     --tag "${DSX_IDENTITY_EXCHANGE_IMAGE}" \
     "${WORKSPACE_ROOT}"
   printf '%s\n' "${DSX_IDENTITY_EXCHANGE_IMAGE}" >"${STATE_DIR}/dsx-identity-exchange-image-ref.txt"
