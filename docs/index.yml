@@ -6,6 +6,9 @@ tabs:
     display-name: Documentation
   api:
     display-name: REST API Reference
+    # The api item below already contributes "rest-api-reference" to the path;
+    # without this the URL repeats it.
+    skip-slug: true
 
 navigation:
   - tab: documentation
