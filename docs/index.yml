@@ -92,3 +92,15 @@ navigation:
         # Render each tag's description from controller/api/openapi.yaml as the
         # section intro, so the concept text ships with the reference.
         tag-description-pages: true
+        # The tab already carries the title, so do not nest a second
+        # "REST API Reference" level (and path segment) under it.
+        flattened: true
+        # Sections in reading order rather than in order of first appearance
+        # in openapi.yaml, which would put Catalog first.
+        layout:
+          - clusters
+          - controlPlane
+          - nodePools
+          - nodeSets
+          - nodes
+          - catalog
