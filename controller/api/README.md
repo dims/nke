@@ -69,8 +69,11 @@ make -C controller/api docs    # writes controller/.local/api-reference.html; ne
 Both honour `x-fern-ignore`: Fern reads it directly, and `redocly.yaml` tells
 Redocly to drop the same elements before rendering. The `API docs` workflow
 builds this page for every pull request that touches the spec or the docs and
-attaches it as the `api-reference` artifact. On `main` it also runs `fern check`
-and publishes the site once `FERN_TOKEN` is configured.
+attaches it as the `api-reference` artifact, runs `fern check`, and publishes a
+Fern preview of the whole site, API Reference tab included, with the URL in the
+job summary. Fork pull requests get no preview, because GitHub withholds secrets
+from them; push the branch to this repository and dispatch the workflow instead.
+On `main` it publishes the site.
 
 ## Checks
 
