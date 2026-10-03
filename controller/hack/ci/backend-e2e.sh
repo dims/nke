@@ -817,6 +817,9 @@ git -C "${WORKSPACE_ROOT}" ls-files --cached --others --exclude-standard -z cont
     --file "${SOURCE_ARCHIVE}"
 
 log "compiling the ${BACKEND} E2E suite for linux/${host_arch}"
+# The default GOPROXY only falls back to direct on 404/410; "|" falls back on
+# any error, so a proxy.golang.org TLS timeout no longer fails the compile.
+export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
 e2e_built=false
 for attempt in 1 2 3; do
   if (cd test/e2e && CGO_ENABLED=0 GOOS=linux GOARCH="${host_arch}" go test -c -o "${E2E_BIN}" .); then
