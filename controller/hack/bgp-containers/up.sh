@@ -73,6 +73,22 @@ sed -e "s|@ROUTER_ID@|${KIND_GW}|g" \
     -e "s|@LISTEN_RANGE@|${KIND_SUBNET}|g" \
     "${HERE}/frr.conf.tmpl" > "${RENDERED_CONF}"
 
+# Pull first, with retries. `docker create` pulls a missing image exactly once,
+# and a registry hiccup there (quay.io answered a blob GET with 502 on
+# 2026-10-03) ended a whole e2e run after five minutes.
+if ! docker image inspect "${FRR_IMAGE}" >/dev/null 2>&1; then
+  pulled=false
+  for attempt in 1 2 3 4 5; do
+    if docker pull -q "${FRR_IMAGE}" >/dev/null; then
+      pulled=true
+      break
+    fi
+    info "pull of ${FRR_IMAGE} failed (attempt ${attempt}/5); retrying in $((attempt * 10))s"
+    sleep $((attempt * 10))
+  done
+  [[ "${pulled}" == true ]] || die "Could not pull ${FRR_IMAGE} after 5 attempts."
+fi
+
 info "Starting FRR in host network mode (routes install on colima/host kernel)..."
 docker create \
   --name "${CONTAINER_NAME}" \
