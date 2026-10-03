@@ -216,10 +216,13 @@ if [[ -n "${NKE_E2E_DOCKERHUB_MIRROR}" ]]; then
   fi
   # Reachability is logged, not enforced: the image still builds and pulls fall
   # through to the next host.
-  if curl -fsS -m 5 -o /dev/null "https://${NKE_E2E_DOCKERHUB_MIRROR}/v2/"; then
-    echo "[build-image] mirror ${NKE_E2E_DOCKERHUB_MIRROR} answered /v2/"
+  # A registry answers /v2/ with 200 or, when it wants a token first, 401;
+  # mirror.gcr.io does the latter, and curl -f used to report that as silence.
+  probe_status="$(curl -sS -m 5 -o /dev/null -w '%{http_code}' "https://${NKE_E2E_DOCKERHUB_MIRROR}/v2/" || echo 000)"
+  if [[ "${probe_status}" == "200" || "${probe_status}" == "401" ]]; then
+    echo "[build-image] mirror ${NKE_E2E_DOCKERHUB_MIRROR} answered /v2/ (HTTP ${probe_status})"
   else
-    echo "[build-image] mirror ${NKE_E2E_DOCKERHUB_MIRROR} did not answer /v2/; pulls will fall through"
+    echo "[build-image] mirror ${NKE_E2E_DOCKERHUB_MIRROR} did not answer /v2/ (HTTP ${probe_status}); pulls will fall through"
   fi
   echo "[build-image] pull order: ${NKE_E2E_DOCKERHUB_MIRROR} -> local dev cache -> upstream"
 else
