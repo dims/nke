@@ -889,9 +889,10 @@ docker image inspect "${CAPD_NODE_IMAGE}" >"${STATE_DIR}/capd-node-image.json"
 
 log "creating Kind management cluster ${KIND_CLUSTER_NAME}"
 KIND_CLUSTER_OWNED=true
+kind_config_for_mirror hack/cwe-capi-kind.yaml "${STATE_DIR}/kind-config.yaml"
 kind create cluster \
   --name "${KIND_CLUSTER_NAME}" \
-  --config hack/cwe-capi-kind.yaml \
+  --config "${STATE_DIR}/kind-config.yaml" \
   --wait 5m
 configure_kind_dockerhub_mirror
 kind load docker-image --name "${KIND_CLUSTER_NAME}" "${CWE_IMAGE}"

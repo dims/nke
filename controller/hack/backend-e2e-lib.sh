@@ -246,3 +246,18 @@ dockerhub_build_args() {
     esac
   done < <(sed -n 's/^ARG \([A-Z_]*\)=\(docker\.io[^ ]*\)$/\1=\2/p' "${dockerfile}")
 }
+
+# Copies a kind config to $2, pointing its `image: kindest/node:...` lines at
+# NKE_E2E_DOCKERHUB_MIRROR when that is set. kind pulls the node image through
+# the host daemon, which on the ARC runners has no registry mirror, so this was
+# the last anonymous docker.io pull every CAPI lane made. The digest is the same
+# on the mirror, and the containerd mirror written into the nodes afterwards is
+# unaffected.
+kind_config_for_mirror() {
+  local src="$1" dst="$2" mirror="${NKE_E2E_DOCKERHUB_MIRROR:-}"
+  if [[ -n "${mirror}" ]]; then
+    sed -E "s#^(\s*image: )kindest/node:#\1${mirror}/kindest/node:#" "${src}" >"${dst}"
+  else
+    cp "${src}" "${dst}"
+  fi
+}
