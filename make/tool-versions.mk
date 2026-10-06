@@ -55,6 +55,10 @@ KIND_SHA256_ARM64 ?= b92cd615e97585de8ddade28ed5cd7feb4248d717c233eea5b03c372989
 KUBECTL_VERSION ?= v1.36.0
 KUBECTL_SHA256_AMD64 ?= 123d8c8844f46b1244c547fffb3c17180c0c26dac9890589fe7e67763298748e
 KUBECTL_SHA256_ARM64 ?= 9f9d9c44a7b5264515ac9da5991584e2395bd50662e651132337e7b4d0c56f8f
+# Temporal CLI for the gofail and tracing e2e dev server; the Linux pins are the CI legs.
+TEMPORAL_CLI_VERSION ?= 1.9.1
+TEMPORAL_CLI_SHA256_LINUX_AMD64 ?= 09a0326a51db84d02735e53542b9ebd8c4758daf47482a9ab0abce15844e60d5
+TEMPORAL_CLI_SHA256_LINUX_ARM64 ?= 6c57c352d52fc3df34412376fd9ba6f74b7e3ace8e426e6cba8600156d36a145
 # clusterctl and the CAPI core/kubeadm providers ship as one release, so one
 # pin covers the binary and everything `clusterctl init` installs.
 CAPI_VERSION    ?= v1.12.3

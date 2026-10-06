@@ -9,6 +9,8 @@ export GOTOOLCHAIN
 
 WORKER_BIN_NAME			?= controller
 TEMPORAL_CLI_DOWNLOAD_DIR	?= $(CURDIR)/.go/temporal-cli
+TEMPORAL_CLI			:= $(TEMPORAL_CLI_DOWNLOAD_DIR)/temporal
+TEMPORAL_CLI_PLATFORM		:= $(shell go env GOOS)_$(shell go env GOARCH)
 CWE_GOFAIL_E2E_WORKER_BINARY	?= $(CURDIR)/.go/bin/cwe-worker-gofail
 GOFAIL				?= $(shell go env GOPATH)/bin/gofail
 SETUP_ENVTEST			?= $(shell go env GOPATH)/bin/setup-envtest
@@ -249,8 +251,17 @@ test-e2e-nico-vms: ## Run NICo VMs happy-path e2e tests
 test-e2e-nico-vms-os-profiles: ## Run the opt-in NICo VMs OS profile provisioning matrix
 	$(MAKE) test-e2e E2E_TIMEOUT=6h ARGS='--label-filter="nico-vms && os-profiles"'
 
+# The SDK's own download has no retry, so one connection reset fails a test; fetch the pinned CLI once instead.
+$(TEMPORAL_CLI):
+	@mkdir -p "$(TEMPORAL_CLI_DOWNLOAD_DIR)"
+	curl -fsSL --retry 8 --retry-all-errors --retry-max-time 240 -o "$(TEMPORAL_CLI).tgz" \
+		"https://temporal.download/assets/temporalio/cli/releases/download/v$(TEMPORAL_CLI_VERSION)/temporal_cli_$(TEMPORAL_CLI_VERSION)_$(TEMPORAL_CLI_PLATFORM).tar.gz"
+	@want='$(TEMPORAL_CLI_SHA256_$(shell echo $(TEMPORAL_CLI_PLATFORM) | tr a-z A-Z))'; \
+		if [ -n "$$want" ]; then echo "$$want  $(TEMPORAL_CLI).tgz" | sha256sum -c -; fi
+	tar -xzf "$(TEMPORAL_CLI).tgz" -C "$(TEMPORAL_CLI_DOWNLOAD_DIR)" temporal && rm -f "$(TEMPORAL_CLI).tgz"
+
 .PHONY: e2e-gofail
-e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
+e2e-gofail: $(TEMPORAL_CLI) ## Execute gofail e2e tests against a local Temporal dev server.
 	@bash -euo pipefail -c '\
 		start=$$SECONDS; last=$$start; \
 		phase() { \
@@ -273,7 +284,7 @@ e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
 		phase "gofail-enable"; \
 		go build -tags gofail -o "$(CWE_GOFAIL_E2E_WORKER_BINARY)" ./cmd/worker; \
 		phase "build-worker"; \
-		TEMPORAL_CLI_DOWNLOAD_DIR="$(TEMPORAL_CLI_DOWNLOAD_DIR)" \
+		TEMPORAL_CLI_PATH="$(TEMPORAL_CLI)" \
 			CWE_GOFAIL_E2E_WORKER_BINARY="$(CWE_GOFAIL_E2E_WORKER_BINARY)" \
 			CWE_GOFAIL_E2E_CLUSTER_CRDS="$(CWE_GOFAIL_E2E_CLUSTER_CRDS)" \
 			CWE_GOFAIL_E2E_CAPNICO_CRDS="$(CWE_GOFAIL_E2E_CAPNICO_CRDS)" \
@@ -286,9 +297,8 @@ e2e-gofail: ## Execute gofail e2e tests against a local Temporal dev server.
 
 
 .PHONY: e2e-tracing
-e2e-tracing: ## Execute the tracing e2e test against a local Temporal dev server and PostgreSQL (initdb and postgres on PATH, or set CWE_GOFAIL_E2E_DB_CONNECTION_STRING).
-	mkdir -p "$(TEMPORAL_CLI_DOWNLOAD_DIR)"
-	TEMPORAL_CLI_DOWNLOAD_DIR="$(TEMPORAL_CLI_DOWNLOAD_DIR)" go test -v -tags gofail ./e2e/tracing -timeout 10m -count=1
+e2e-tracing: $(TEMPORAL_CLI) ## Execute the tracing e2e test against a local Temporal dev server and PostgreSQL (initdb and postgres on PATH, or set CWE_GOFAIL_E2E_DB_CONNECTION_STRING).
+	TEMPORAL_CLI_PATH="$(TEMPORAL_CLI)" go test -v -tags gofail ./e2e/tracing -timeout 10m -count=1
 
 
 .PHONY: docker-build-local
