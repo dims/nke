@@ -266,6 +266,9 @@ jobs:
           raise_minimum fs.inotify.max_user_watches 1048576
 
       - name: Run the ${{ inputs.backend }} E2E suite
+        env:
+          # clusterctl reads provider releases through the GitHub API; the pool's shared egress hits the anonymous rate limit.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make test-e2e-backend-ci
 
       - name: Check whether diagnostics are safe to upload

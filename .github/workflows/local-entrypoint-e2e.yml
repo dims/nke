@@ -207,6 +207,9 @@ jobs:
           tilt version
 
       - name: Run the local entrypoint
+        env:
+          # `make capd-up` runs clusterctl on the runner; see backend-e2e.yml.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./hack/local-backend-e2e.sh
         working-directory: controller
 
