@@ -197,11 +197,8 @@ func cloneStringMap(source map[string]any) map[string]any {
 
 func openVSwitchStanzaMatchesLink(stanza map[string]any, link openVSwitchLink) bool {
 	match, _ := stanza["match"].(map[string]any)
-	if name, _ := match["name"].(string); name != "" {
-		matched, err := filepath.Match(name, link.Name)
-		if err == nil && matched {
-			return true
-		}
+	if name, _ := match["name"].(string); name == link.Name {
+		return true
 	}
 	mac, _ := match["macaddress"].(string)
 	return link.Address != "" && strings.EqualFold(mac, link.Address)
