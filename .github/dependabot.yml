@@ -139,3 +139,6 @@ updates:
       github-actions:
         patterns:
           - "*"
+    ignore:
+      # The org allowlist pins this action by sha; a bump fails every workflow using it at startup.
+      - dependency-name: "oras-project/setup-oras"
