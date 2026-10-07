@@ -313,8 +313,12 @@ package: package-all ## Default package = all arches
 .PHONY: nfpm
 nfpm: $(NFPM_BIN) ## Build the pinned Debian packaging tool.
 
+# `go install` has no retry; one dropped proxy.golang.org stream fails the OS image bake.
 $(NFPM_BIN):
-	@GOBIN=$(abspath $(dir $(NFPM_BIN))) go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v$(NFPM_VERSION)
+	@for i in 1 2 3; do \
+		GOBIN=$(abspath $(dir $(NFPM_BIN))) go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v$(NFPM_VERSION) && exit 0; \
+		echo "go install nfpm: attempt $$i failed" >&2; sleep 15; \
+	done; exit 1
 
 # Usage: $(call build_deb,amd64)
 define build_deb
