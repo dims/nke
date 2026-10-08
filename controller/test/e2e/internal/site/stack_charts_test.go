@@ -164,7 +164,7 @@ func TestSBOMAgainstDeployPath(t *testing.T) {
 	// that deploy path installs, not whatever a lane is configured for. The
 	// two are the same thing read from the same file, which is the point of
 	// controllerNameFromDeployPath.
-	name, err := controllerNameFromDeployPath(assets)
+	name, err := controllerNameFromDeployPath(assets, LayoutDeploy)
 	if err != nil {
 		t.Fatalf("reading the deploy path's controller name: %v", err)
 	}

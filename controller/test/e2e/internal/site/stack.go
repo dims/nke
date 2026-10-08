@@ -24,9 +24,6 @@ import (
 )
 
 const (
-	// defaultDeployPath is the customer deploy path, relative to the assets.
-	defaultDeployPath = "deploy/nico"
-
 	// defaultStorageClassManifest is rancher local-path, what the reference
 	// site used because its instance type has one NVMe with root on it.
 	defaultStorageClassManifest = "https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.31/deploy/local-path-storage.yaml"
@@ -166,8 +163,12 @@ type Tenant struct {
 // not from this suite, so the suite follows whatever deploy path the checkout
 // it stages carries.
 type Stack struct {
+	// Layout is how the assets install a deploy path, as DetectLayout read it
+	// from the commit they were exported from. Defaults to LayoutDeploy.
+	Layout Layout
+
 	// DeployPath is the deploy path to install, relative to the assets.
-	// Defaults to deploy/nico.
+	// Defaults to the Layout's customer deploy path.
 	DeployPath string
 
 	Controller Image
@@ -293,8 +294,11 @@ func (d Stack) Deploy(ctx context.Context, s infra.Session, t DeployTarget) erro
 }
 
 func (d Stack) withDefaults() Stack {
+	if d.Layout == "" {
+		d.Layout = LayoutDeploy
+	}
 	if d.DeployPath == "" {
-		d.DeployPath = defaultDeployPath
+		d.DeployPath = d.Layout.DefaultDeployPath()
 	}
 	if d.StorageClassManifest == "" {
 		d.StorageClassManifest = defaultStorageClassManifest
@@ -305,44 +309,44 @@ func (d Stack) withDefaults() Stack {
 	return d
 }
 
-const (
-	// controllerReleasePath is the HelmRelease the deploy/nico deploy path
-	// installs CWE from, relative to the exported assets.
-	controllerReleasePath = defaultDeployPath + "/controller/release.yaml"
-)
-
-// CheckControllerName fails when the deploy path installs CWE under a name the
-// suite is not configured to look for.
+// CheckControllerName makes the suite look for the controller under the name
+// the deploy path installs it as, and fails when the lane pinned a different
+// one.
 //
 // These are two different owners of one string. The deploy path is exported
 // from the controller version under test, so a release cut before CWE was
 // renamed installs cloud-workflow-engine and one cut after installs
-// nke-controller. What the suite looks for comes from CWE_NAMESPACE and
-// CWE_SERVICE, which the lane sets. Nothing makes the two move together.
+// nke-controller. What the suite looks for comes from NKE_CONTROLLER_NAMESPACE
+// and NKE_CONTROLLER_SERVICE, or their CWE_ legacy names, when the lane sets
+// them. Left unset, the suite adopts the deploy path's name, so a default
+// dispatch qualifies either kind of release without naming it.
 //
 // They disagreed once already, and the symptom was expensive: the readiness
 // probe opened a port-forward onto a Service that did not exist, the forwarder
 // retried the NotFound rather than reporting it, and the run spent ten minutes
 // reporting that CWE would not come up while CWE was healthy in the namespace
 // beside it. Checked here, on the runner, before any machine is taken.
-func CheckControllerName(assets string) error {
-	deployed, err := controllerNameFromDeployPath(assets)
+func CheckControllerName(assets string, l Layout) error {
+	deployed, err := controllerNameFromDeployPath(assets, l)
 	if err != nil {
 		return err
+	}
+	if !controller.Pinned() {
+		return controller.Adopt(deployed)
 	}
 	if deployed == controller.Namespace() && deployed == controller.Service() {
 		return nil
 	}
 	return fmt.Errorf(
-		"the deploy path installs CWE as %q but the suite looks for %s/%s: set %s and %s to %q, or qualify a controller whose deploy path matches",
+		"the deploy path installs CWE as %q but the suite looks for %s/%s: set %s and %s to %q, unset them to adopt the deploy path's name, or qualify a controller whose deploy path matches",
 		deployed, controller.Namespace(), controller.Service(), controller.EnvNamespace, controller.EnvService, deployed,
 	)
 }
 
 // controllerNameFromDeployPath is the name a set of exported assets installs
 // CWE under, read from the HelmRelease rather than assumed.
-func controllerNameFromDeployPath(assets string) (string, error) {
-	raw, err := os.ReadFile(filepath.Join(assets, controllerReleasePath))
+func controllerNameFromDeployPath(assets string, l Layout) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(assets, l.releasePath()))
 	if err != nil {
 		return "", fmt.Errorf("reading the deploy path's controller release: %w", err)
 	}
@@ -353,10 +357,10 @@ func controllerNameFromDeployPath(assets string) (string, error) {
 		} `json:"release"`
 	}
 	if err := yaml.Unmarshal(raw, &release); err != nil {
-		return "", fmt.Errorf("parsing %s: %w", controllerReleasePath, err)
+		return "", fmt.Errorf("parsing %s: %w", l.releasePath(), err)
 	}
 	if release.Release.Namespace == "" {
-		return "", fmt.Errorf("%s names no release namespace, so the name CWE is installed under cannot be read", controllerReleasePath)
+		return "", fmt.Errorf("%s names no release namespace, so the name CWE is installed under cannot be read", l.releasePath())
 	}
 	return release.Release.Namespace, nil
 }
@@ -364,12 +368,12 @@ func controllerNameFromDeployPath(assets string) (string, error) {
 // controllerName is the namespace, Service and ServiceAccount CWE is installed
 // under, and so the last segment of its SPIFFE ID.
 //
-// Read from the cwe package rather than written out here, because this file
-// does not get to choose it. The deploy path does, and the deploy path is
+// Read from the controller package rather than written out here, because this
+// file does not get to choose it. The deploy path does, and the deploy path is
 // exported from the controller version under test: a release cut before CWE
 // was renamed installs cloud-workflow-engine, one cut after installs
-// nke-controller. The lane says which by setting CWE_NAMESPACE and
-// CWE_SERVICE, and CheckControllerName fails the run when the two disagree.
+// nke-controller. CheckControllerName adopts the deploy path's name unless the
+// lane pinned one, and fails the run when a pinned name disagrees.
 func controllerName() string { return controller.Service() }
 
 // spireAdminPath is CWE's SPIFFE ID below the trust domain. A name that does
@@ -432,8 +436,7 @@ func (d Stack) commands(t DeployTarget, valuesDir string) []step {
 		{"clusterctl init", env + "clusterctl init --wait-providers"},
 		{"default storage class", env + "kubectl apply -f " + shellQuote(d.StorageClassManifest) +
 			" && " + env + "kubectl patch storageclass " + shellQuote(d.StorageClassName) + " -p " + shellQuote(defaultClass)},
-		{"install " + d.DeployPath, env + "bash " + shellQuote(path.Join(assetsDir, scriptsDir, "nke-deploy.sh")) + " install" +
-			" --deploy-path " + shellQuote(path.Join(assetsDir, d.DeployPath)) +
+		{"install " + d.DeployPath, env + d.Layout.install(d.DeployPath) +
 			" --config " + shellQuote(path.Join(valuesDir, "bootstrap-config.json")) +
 			" " + values(releaseController) +
 			" " + values(releaseSpire) +

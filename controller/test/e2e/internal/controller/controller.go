@@ -33,6 +33,22 @@ const (
 	LegacyEnvPort      = "CWE_SERVICE_PORT"
 )
 
+// Pinned reports whether the lane named the controller through the environment.
+// Unpinned, the suite adopts whatever name the deploy path installs.
+func Pinned() bool {
+	return cmp.Or(os.Getenv(EnvNamespace), os.Getenv(LegacyEnvNamespace), os.Getenv(EnvService), os.Getenv(LegacyEnvService)) != ""
+}
+
+// Adopt makes the suite look for the controller under name, as the deploy path
+// installs it. Set in the environment rather than in a variable so every reader
+// here and every child process agree.
+func Adopt(name string) error {
+	if err := os.Setenv(EnvNamespace, name); err != nil {
+		return err
+	}
+	return os.Setenv(EnvService, name)
+}
+
 // Namespace is the namespace to look for the controller in.
 func Namespace() string {
 	return cmp.Or(os.Getenv(EnvNamespace), os.Getenv(LegacyEnvNamespace), ServiceNamespace)

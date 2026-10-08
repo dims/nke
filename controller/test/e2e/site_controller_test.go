@@ -755,18 +755,24 @@ func newStack(cfg config.Config, arch string) (site.Stack, []string, error) {
 	if err != nil {
 		return site.Stack{}, nil, err
 	}
-	assets, err := site.ExportRef(context.Background(), repo, ref, site.DeployAssetPaths())
+	// A released controller carries the layout of its own commit, which may
+	// predate the move of the deploy path and its installer.
+	layout, err := site.DetectLayout(context.Background(), repo, ref)
+	if err != nil {
+		return site.Stack{}, nil, err
+	}
+	assets, err := site.ExportRef(context.Background(), repo, ref, layout.AssetPaths())
 	if err != nil {
 		return site.Stack{}, nil, err
 	}
 	DeferCleanup(func() { _ = os.RemoveAll(assets) })
 
 	// Before a machine is taken: the deploy path chooses the name CWE is
-	// installed under, the lane chooses the name the suite looks for, and
-	// nothing else makes the two agree. Checked here rather than beside the
+	// installed under, and the suite follows it unless the lane pinned a name
+	// of its own, which then has to agree. Checked here rather than beside the
 	// spec because the stack is what exports these assets and so what knows
 	// the name they install.
-	if nameErr := site.CheckControllerName(assets); nameErr != nil {
+	if nameErr := site.CheckControllerName(assets, layout); nameErr != nil {
 		return site.Stack{}, nil, nameErr
 	}
 	images := cfg.Site.Images
@@ -786,8 +792,9 @@ func newStack(cfg config.Config, arch string) (site.Stack, []string, error) {
 	unameArch := map[string]string{"amd64": "x86_64", "arm64": "arm64"}[arch]
 	GinkgoLogr.Info("deploying the stack", "controller", controller.Ref(), "profiles", profiles.Ref())
 	return site.Stack{
+		Layout:     layout,
 		Assets:     assets,
-		AssetPaths: site.DeployAssetPaths(),
+		AssetPaths: layout.AssetPaths(),
 		Controller: controller,
 		Profiles:   profiles,
 		Provider:   deployConfig,

@@ -26,21 +26,18 @@ const (
 	// deployPathRef in site_controller_test.go.
 	DeployPathRef = "HEAD"
 
-	// scriptsDir holds the executor, its helpers and the customer deploy
-	// path deploy/nico; deployDir the e2e deploy paths and the charts every
-	// path installs by relative path; hackDir the post-install script; and
-	// nktpChartDir the NKTP chart, which the nktp item installs by relative
-	// path from outside both.
-	scriptsDir   = "deploy"
+	// deployDir holds the e2e deploy paths and the charts every path installs
+	// by relative path; hackDir the post-install script; and nktpChartDir the
+	// NKTP chart, which the nktp item installs by relative path from outside
+	// both. The installer and the customer deploy path depend on the Layout.
 	deployDir    = "controller/deploy"
 	hackDir      = "controller/hack"
 	nktpChartDir = "nktp/deploy/charts/nktp"
 )
 
-// DeployAssetPaths are what the Stack deployer runs from.
-func DeployAssetPaths() []string {
-	return []string{scriptsDir, deployDir, hackDir, nktpChartDir}
-}
+// DeployAssetPaths are what the Stack deployer runs from at a commit with the
+// current layout; see Layout.AssetPaths for a released controller's commit.
+func DeployAssetPaths() []string { return LayoutDeploy.AssetPaths() }
 
 // ExportRef writes paths as they are at ref in the repository at repo into a
 // new temporary directory, and returns it for Site.Assets. Only tracked
