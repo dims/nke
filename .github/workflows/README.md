@@ -270,6 +270,15 @@ checked there. Values that should follow the repository name, such as the
 keep using `${{ github.repository }}`, which GitHub fills in with the current
 slug.
 
+The OIDC subject is the other place the slug lives. The token GitHub mints
+for a job carries `repo:<owner>@<owner id>/<name>@<id>:...` in its `sub`
+claim, and each AWS role's trust policy matches that claim. A policy that
+matches the name stops working when the repository is renamed, and the
+failure appears only when a release publishes. `aws-oidc-probe.yml` assumes
+each role with no publish side effect and prints the subject it presented.
+Dispatch it after editing a trust policy and after a rename, and write trust
+policies against the ids, never the name.
+
 ## Review checklist
 
 Before submitting a workflow change:

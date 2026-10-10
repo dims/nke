@@ -1,0 +1,202 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Proves that each AWS role the publishing workflows assume still trusts the
+# OIDC token GitHub mints for this repository, without publishing anything.
+#
+# WHY A PROBE
+#
+# The publishing workflows reach AWS through OpenID Connect: GitHub mints a
+# token, aws-actions/configure-aws-credentials exchanges it for the role in
+# `role-to-assume`, and the role's trust policy decides on the token's `sub`
+# claim. That claim embeds the repository's name as well as its id (this
+# repository uses the immutable form, `repo:<owner>@<owner id>/<name>@<id>:...`;
+# `gh api repos/dsx-ai-factory/nke/actions/oidc/customization/sub` prints the
+# template). A trust policy that matches the name breaks the moment the
+# repository is renamed or transferred, and the break surfaces only when a
+# release tries to publish.
+#
+# Nothing short of a release exercises the production roles today. The
+# `s3-publish` and `apt-intake` environments admit only tag refs (Settings ->
+# Environments -> deployment branches and tags), so no branch can run a job
+# bound to them. `s3-publish-non-prod` has no such rule and its role variable
+# points at the same role, so a job bound to it exercises that role's trust
+# policy with a subject that differs only in its environment segment. The two
+# ISO cache roles are repository variables and need no environment.
+#
+# WHAT IT DOES
+#
+# For each role: print the claims of the token the job presents (never the
+# token itself), assume the role for the shortest session STS allows, and ask
+# STS who the caller is. No S3 call, no write. Dispatch it after editing a
+# trust policy and after renaming or transferring the repository. A job that
+# fails at "Assume the role" with "Not authorized to perform
+# sts:AssumeRoleWithWebIdentity" means the trust policy rejected the subject
+# printed in the step before it.
+#
+# Dispatch only. It has no place in the merge gate: it needs id-token: write
+# and an environment, which .github/workflows/README.md keeps out of the
+# aggregate, and it tells the gate nothing about a pull request.
+
+name: AWS OIDC Probe
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: AWS OIDC Probe
+  cancel-in-progress: false
+
+env:
+  # The ISO build cache lives here (os-image-cache.yml, os-image-artifact.yml).
+  BUILD_CACHE_REGION: us-east-1
+
+jobs:
+  s3-and-apt:
+    name: S3 and apt intake role, through s3-publish-non-prod
+    # The repository by id, which survives a rename; see .github/workflows/README.md.
+    if: github.repository_id == '1323115536'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: s3-publish-non-prod
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require the role variable
+        env:
+          ROLE_ARN: ${{ vars.S3_PUBLISH_AWS_ROLE_ARN }}
+        run: |
+          if [[ -z "${ROLE_ARN}" ]]; then
+            echo "::error::S3_PUBLISH_AWS_ROLE_ARN is not set in the s3-publish-non-prod environment"
+            exit 1
+          fi
+
+      - name: Show the subject this job presents
+        run: ./hack/oidc-subject.sh
+
+      - name: Assume the role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.S3_PUBLISH_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.S3_PUBLISH_AWS_REGION || 'us-west-2' }}
+          role-session-name: aws-oidc-probe
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - name: Ask STS who the caller is
+        run: aws sts get-caller-identity --output table
+
+  cache-write:
+    name: ISO cache write role
+    if: github.repository_id == '1323115536'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require the role variable
+        env:
+          ROLE_ARN: ${{ vars.NKE_GHA_CACHE_WRITE_ROLE_ARN }}
+        run: |
+          if [[ -z "${ROLE_ARN}" ]]; then
+            echo "::error::NKE_GHA_CACHE_WRITE_ROLE_ARN is not set as a repository variable"
+            exit 1
+          fi
+
+      - name: Show the subject this job presents
+        run: ./hack/oidc-subject.sh
+
+      - name: Assume the role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.NKE_GHA_CACHE_WRITE_ROLE_ARN }}
+          aws-region: ${{ env.BUILD_CACHE_REGION }}
+          role-session-name: aws-oidc-probe
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - name: Ask STS who the caller is
+        run: aws sts get-caller-identity --output table
+
+  cache-read:
+    name: ISO cache read role
+    if: github.repository_id == '1323115536'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require the role variable
+        env:
+          ROLE_ARN: ${{ vars.NKE_GHA_CACHE_READ_ROLE_ARN }}
+        run: |
+          if [[ -z "${ROLE_ARN}" ]]; then
+            echo "::error::NKE_GHA_CACHE_READ_ROLE_ARN is not set as a repository variable"
+            exit 1
+          fi
+
+      - name: Show the subject this job presents
+        run: ./hack/oidc-subject.sh
+
+      - name: Assume the role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.NKE_GHA_CACHE_READ_ROLE_ARN }}
+          aws-region: ${{ env.BUILD_CACHE_REGION }}
+          role-session-name: aws-oidc-probe
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - name: Ask STS who the caller is
+        run: aws sts get-caller-identity --output table
+
+  agent-dev:
+    name: Agent dev package role
+    # Skipped while the variable is unset; agent-deb-publish.yml's publish-dev
+    # job reads the same variable and fails without it.
+    if: github.repository_id == '1323115536' && vars.AGENT_DEV_AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show the subject this job presents
+        run: ./hack/oidc-subject.sh
+
+      - name: Assume the role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AGENT_DEV_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AGENT_DEV_AWS_REGION || 'us-west-2' }}
+          role-session-name: aws-oidc-probe
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - name: Ask STS who the caller is
+        run: aws sts get-caller-identity --output table
