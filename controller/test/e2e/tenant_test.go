@@ -860,7 +860,7 @@ func configuredManagement() (managementCluster, error) {
 }
 
 // setupTenantTest builds the per-backend wiring (clients, trust domain, logger)
-// and preflights NKE reachability over the port-forward. It does not create a
+// and preflights NVKE reachability over the port-forward. It does not create a
 // cluster.
 func setupTenantTest(ctx context.Context, mgmt managementCluster, timeouts nvke.Options) (tenantTest, error) {
 	cfg, err := config.Load(cfgPath)

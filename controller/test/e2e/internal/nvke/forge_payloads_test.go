@@ -343,7 +343,7 @@ func TestBuildForgeNodePayloadsBootParametersFollowTheArch(t *testing.T) {
 }
 
 // TestBuildForgeNodePayloadsAptSuiteFollowsTheImage covers the other blocker:
-// NKE publishes a suite per Ubuntu release, so a 26.04 image installing from
+// NVKE publishes a suite per Ubuntu release, so a 26.04 image installing from
 // the 24.04 suite finds no packages.
 func TestBuildForgeNodePayloadsAptSuiteFollowsTheImage(t *testing.T) {
 	for _, tc := range []struct{ arch, url, want, wantAbsent string }{
@@ -552,7 +552,7 @@ func TestBuildForgeNodePayloadsDoesNotInstallNvkeAgent(t *testing.T) {
 	}
 }
 
-// The NKE OS image pre-installs spire-agent and owns its units, its first-boot
+// The NVKE OS image pre-installs spire-agent and owns its units, its first-boot
 // renderer and its TPM plugin checksum. Installing the apt repository's build
 // over that swaps an image-owned package for a generic one, so the pre-kubeadm
 // commands must not mention it at all.

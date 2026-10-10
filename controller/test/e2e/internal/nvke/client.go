@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package nke offers utilities to interact with the NKE management plane.
-// Like a thin client over the NKE generated API, reached over a port-forward to
-// the NKE Service's backing pod. The client carries an NKE credential of its
+// Package nke offers utilities to interact with the NVKE management plane.
+// Like a thin client over the NVKE generated API, reached over a port-forward to
+// the NVKE Service's backing pod. The client carries an NVKE credential of its
 // own, separate from the kubeconfig credential authenticating the forward.
 package nvke
 
@@ -32,7 +32,7 @@ const (
 
 const (
 	// discoverTimeout bounds the cluster reads NewClient does to work out whether
-	// NKE is authenticating and for what audience.
+	// NVKE is authenticating and for what audience.
 	discoverTimeout = 30 * time.Second
 )
 
@@ -41,7 +41,7 @@ type Options struct {
 	Provision, Upgrade, Delete, Poll time.Duration
 }
 
-// TokenSource yields the bearer token to present to the NKE API. Satisfied by
+// TokenSource yields the bearer token to present to the NVKE API. Satisfied by
 // *authtoken.Source; an interface so a spec can hand over a wrong identity.
 type TokenSource interface {
 	// Token must refresh: one client serves a whole provisioning wait,
@@ -55,7 +55,7 @@ type Client struct {
 	opts Options
 }
 
-// NewClient builds the generated API client over a port-forward to the NKE
+// NewClient builds the generated API client over a port-forward to the NVKE
 // Service's backing pod, shared process-wide and closed by
 // kube.CloseSharedForwarders. It discovers its own credential, so every spec
 // presents one. ctx bounds only the discovery reads.
@@ -114,7 +114,7 @@ func bearerToken(tokens TokenSource) api.RequestEditorFn {
 // API exposes the underlying generated client for preflight checks.
 func (c *Client) API() *api.ClientWithResponses { return c.api }
 
-// ListClusters returns every cluster known to NKE.
+// ListClusters returns every cluster known to NVKE.
 func (c *Client) ListClusters(ctx context.Context) ([]api.Cluster, error) {
 	resp, err := c.api.ListClustersWithResponse(ctx, nil)
 	if err != nil {

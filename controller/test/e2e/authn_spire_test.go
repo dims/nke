@@ -29,7 +29,7 @@ import (
 	"github.com/dsx-ai-factory/nvke/controller/test/e2e/internal/kube"
 )
 
-// The SPIRE half of NKE API authentication. The Workload API issues a JWT-SVID
+// The SPIRE half of NVKE API authentication. The Workload API issues a JWT-SVID
 // only to an attested process, so the caller is a pod this spec creates and its
 // termination message crosses back. The wrong-audience case is what makes the
 // 200 mean anything; path-prefix admission is admit_test.go's job.
@@ -61,7 +61,7 @@ var _ = Describe("NKE API authentication with a SPIRE JWT-SVID", Label("authn", 
 		}
 		if mode != authnModeEnforcing {
 			// Permissive answers 200 to everything, so both cases below would
-			// pass against an NKE that never heard of SPIRE.
+			// pass against an NVKE that never heard of SPIRE.
 			Skip(fmt.Sprintf(
 				"authentication is %s on Deployment %s/%s: a SPIRE acceptance that is not allowed to reject proves nothing",
 				mode, controller.Namespace(), controller.Deployment(),
@@ -88,7 +88,7 @@ var _ = Describe("NKE API authentication with a SPIRE JWT-SVID", Label("authn", 
 		}
 		Expect(err).NotTo(HaveOccurred(), "read the probe's service account")
 
-		// NKE's own image, the one on the node carrying bash, curl and the
+		// NVKE's own image, the one on the node carrying bash, curl and the
 		// Workload API JWT fetcher.
 		controllerImage, err = controllerContainerImage(tctx, clientset)
 		Expect(err).NotTo(HaveOccurred(), "read the NKE deployment's image")
@@ -147,7 +147,7 @@ const (
 	spireCSIDriver         = "csi.spiffe.io"
 )
 
-// spireAdmission is the identity space NKE admits and the audience it expects.
+// spireAdmission is the identity space NVKE admits and the audience it expects.
 type spireAdmission struct {
 	Audience     string
 	TrustDomain  string
@@ -210,7 +210,7 @@ func parseSpireAdmission(raw []byte) (spireAdmission, bool, error) {
 		}
 
 		// The per-issuer list supersedes the deployment-wide one rather than
-		// adding to it. NKE matches any-of, so the first entry will do.
+		// adding to it. NVKE matches any-of, so the first entry will do.
 		audiences := parsed.Audiences
 		if len(issuer.Audiences) > 0 {
 			audiences = issuer.Audiences

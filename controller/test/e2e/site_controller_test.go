@@ -37,7 +37,7 @@ import (
 const (
 	siteStageProvision = "provision" // a Forge node, reachable, then released
 	siteStageBootstrap = "bootstrap" // plus vanilla Kubernetes from nvkectl
-	siteStageFull      = "full"      // plus the NKE stack, the controller, and a tenant
+	siteStageFull      = "full"      // plus the NVKE stack, the controller, and a tenant
 )
 
 // Secrets the site controller run reads from the environment. They are never written to

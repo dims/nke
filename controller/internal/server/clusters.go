@@ -125,7 +125,7 @@ func (s *clusterService) applyClusterDefaults(req *api.CreateClusterRequest, clu
 }
 
 // pinFleetOIDCProviders pins none before Kubernetes 1.34, which cannot read the
-// AuthenticationConfiguration NKE renders.
+// AuthenticationConfiguration NVKE renders.
 func (s *clusterService) pinFleetOIDCProviders(cluster *db.Cluster) {
 	if s.fleetOIDC == nil {
 		return

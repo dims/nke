@@ -279,9 +279,9 @@ func (c *Controller) refreshCluster(ctx context.Context, cluster db.Cluster) (db
 	return live, false, nil
 }
 
-// publishSPIRE applies the NKE tenant RBAC first, then publishes the SPIRE
+// publishSPIRE applies the NVKE tenant RBAC first, then publishes the SPIRE
 // exec-auth kubeconfig and the tenant CA trust bundle. RBAC lands before the
-// kubeconfig Secret because the Secret is only useful once NKE has access to the
+// kubeconfig Secret because the Secret is only useful once NVKE has access to the
 // tenant cluster.
 func (c *Controller) publishSPIRE(ctx context.Context, cluster db.Cluster, adminConf []byte) error {
 	if err := c.applyRBAC(ctx, cluster, adminConf); err != nil {

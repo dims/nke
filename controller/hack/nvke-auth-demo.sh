@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# The acceptance test for NKE API authentication: a handful of curls, one table.
+# The acceptance test for NVKE API authentication: a handful of curls, one table.
 # See usage() below, or run with --help.
 
 set -uo pipefail

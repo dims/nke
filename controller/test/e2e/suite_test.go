@@ -203,8 +203,8 @@ func optionalVersion(component string) string {
 	return versions[component]
 }
 
-// Specs reach NKE over a port-forward they share and establish lazily; this
-// closes it. A no-op when no spec ever talked to NKE.
+// Specs reach NVKE over a port-forward they share and establish lazily; this
+// closes it. A no-op when no spec ever talked to NVKE.
 var _ = AfterSuite(func() {
 	kube.CloseSharedForwarders()
 })
