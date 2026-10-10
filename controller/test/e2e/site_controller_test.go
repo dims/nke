@@ -262,7 +262,7 @@ var _ = Describe("Site controller on Forge", Ordered, ContinueOnFailure, Label("
 			if err != nil {
 				collectSiteDiagnostics(ctx, session, secrets...)
 			}
-			Expect(err).NotTo(HaveOccurred(), "should install the NKE stack")
+			Expect(err).NotTo(HaveOccurred(), "should install the NVKE stack")
 			deployed = true
 		}, NodeTimeout(1*time.Hour))
 

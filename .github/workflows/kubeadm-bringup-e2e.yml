@@ -132,7 +132,7 @@ jobs:
       # lives in that module, which keeps go.work and other modules' go.mod out
       # of this change. NICO_VMS_LIBVIRT_NETWORK is deliberately absent: setting
       # it at all selects libvirt-network mode, which is for shared hosts.
-      - name: Smoke test nico-vms (2 VMs, no NKE packages)
+      - name: Smoke test nico-vms (2 VMs, no NVKE packages)
         env:
           # Defaults are sized for hardware virtualisation; readiness is 15m.
           NICO_VMS_READINESS_TIMEOUT: 45m

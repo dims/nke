@@ -161,7 +161,7 @@ func (c *Controller) reconcileAutoMode(ctx context.Context, tx db.Tx, nodePool d
 				Type:               constants.NodeConditionTypeNeedsRecycle,
 				Status:             corev1.ConditionTrue,
 				Reason:             "Deprecated",
-				Message:            "NKE auto-mode recycling deprecated node",
+				Message:            "NVKE auto-mode recycling deprecated node",
 				LastTransitionTime: metav1.Now(),
 			},
 		})

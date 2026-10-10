@@ -217,5 +217,5 @@ func TestE2E(t *testing.T) {
 	// the tenant client talks to a machine through a relay, and its retries
 	// and REST-layer warnings are what a slow or flaky run needs explained.
 	ctrllog.SetLogger(GinkgoLogr)
-	RunSpecs(t, "NKE E2E Suite")
+	RunSpecs(t, "NVKE E2E Suite")
 }

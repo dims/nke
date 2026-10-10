@@ -33,7 +33,7 @@ import (
 
 // The negative cases, and the only thing in the suite that would notice if NVKE
 // stopped rejecting: every other spec presents the admitted credential.
-var _ = Describe("NKE API authentication", Label("authn"), func() {
+var _ = Describe("NVKE API authentication", Label("authn"), func() {
 	var (
 		restConfig *rest.Config
 		clientset  kubernetes.Interface
@@ -50,7 +50,7 @@ var _ = Describe("NKE API authentication", Label("authn"), func() {
 		audience, found, mode = authnDeployment(ctx, clientset)
 		if !found {
 			authnAbsentf(
-				"authentication is OFF: ConfigMap %s/%s does not exist, so this NKE is configured to authenticate nobody and there is no audience to mint against",
+				"authentication is OFF: ConfigMap %s/%s does not exist, so this NVKE is configured to authenticate nobody and there is no audience to mint against",
 				controller.Namespace(), authtoken.ConfigMapName,
 			)
 		}
@@ -110,7 +110,7 @@ var _ = Describe("NKE API authentication", Label("authn"), func() {
 		status, body, header := authnListClusters(ctx, authnClient(restConfig, source))
 
 		Expect(status).To(Equal(http.StatusUnauthorized),
-			"a token for audience %q must not be accepted by an NKE expecting %q; response body: %s",
+			"a token for audience %q must not be accepted by an NVKE expecting %q; response body: %s",
 			authnWrongAudience, audience, body)
 		Expect(header.Get("WWW-Authenticate")).To(HavePrefix("Bearer"))
 		expectGenericErrorBody(body)
@@ -286,7 +286,7 @@ func authnDeployment(ctx context.Context, clientset kubernetes.Interface) (strin
 	Expect(err).NotTo(HaveOccurred(), "read the deployment's auth configuration")
 
 	mode, err := detectAuthnEnforcement(tctx, clientset)
-	Expect(err).NotTo(HaveOccurred(), "read the NKE deployment's enforcement mode")
+	Expect(err).NotTo(HaveOccurred(), "read the NVKE deployment's enforcement mode")
 
 	return audience, found, mode
 }
@@ -342,7 +342,7 @@ func authnForwarder(restConfig *rest.Config) *kube.ServiceForwarder {
 func authnClient(restConfig *rest.Config, tokens nvke.TokenSource) *nvke.Client {
 	GinkgoHelper()
 	client, err := nvke.NewClientWithTokenSource(restConfig, nvke.Options{}, tokens)
-	Expect(err).NotTo(HaveOccurred(), "build an NKE API client")
+	Expect(err).NotTo(HaveOccurred(), "build an NVKE API client")
 	return client
 }
 
@@ -470,11 +470,11 @@ func TestDetectAuthnEnforcement(t *testing.T) {
 	t.Run("a missing deployment is an error, not a mode", func(t *testing.T) {
 		// Skipping here would turn a broken kubeconfig into a green run.
 		if _, err := detectAuthnEnforcement(context.Background(), fake.NewClientset()); err == nil {
-			t.Fatal("expected an error when the NKE deployment cannot be read")
+			t.Fatal("expected an error when the NVKE deployment cannot be read")
 		}
 	})
 
-	t.Run("a sidecar's environment is not NKE's", func(t *testing.T) {
+	t.Run("a sidecar's environment is not NVKE's", func(t *testing.T) {
 		// A sidecar's AUTH_CONFIG_PATH is not NVKE's.
 		sidecarOnly := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Namespace: controller.Namespace(), Name: controller.Deployment()},
@@ -488,7 +488,7 @@ func TestDetectAuthnEnforcement(t *testing.T) {
 			},
 		}
 		if _, err := detectAuthnEnforcement(context.Background(), fake.NewClientset(sidecarOnly)); err == nil {
-			t.Fatal("expected an error when the Deployment carries no NKE container")
+			t.Fatal("expected an error when the Deployment carries no NVKE container")
 		}
 	})
 }

@@ -224,7 +224,7 @@ func aptSuiteFor(imageURL string) (string, error) {
 	}
 	suite, known := aptSuite(match[1])
 	if suite == "" {
-		return "", fmt.Errorf("no NKE apt suite is known for Ubuntu %s (only %s); publish one and add it to aptSuite", match[1], strings.Join(known, ", "))
+		return "", fmt.Errorf("no NVKE apt suite is known for Ubuntu %s (only %s); publish one and add it to aptSuite", match[1], strings.Join(known, ", "))
 	}
 	return suite, nil
 }

@@ -359,7 +359,7 @@ func (e *Engine) Deploy(ctx context.Context, kubeconfigPath string, cfg Config) 
 	}
 	if cfg.ProvisionedProviderImage == "" {
 		return errors.New("controllerdeploy: Config.ProvisionedProviderImage is required; the CAPI " +
-			"objects the NKE controller writes for a site cluster go unreconciled without it " +
+			"objects the NVKE controller writes for a site cluster go unreconciled without it " +
 			"(see Config.ProvisionedProviderImage)")
 	}
 

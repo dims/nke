@@ -375,7 +375,7 @@ func TestBuildForgeNodePayloadsAptSuiteFollowsTheImage(t *testing.T) {
 func TestBuildForgeNodePayloadsRejectsAnUnknownRelease(t *testing.T) {
 	for _, tc := range []struct{ name, url, want string }{
 		{"no release in the url", "https://cdn.invalid/nke-node.qcow2", "cannot tell which Ubuntu release"},
-		{"a release with no suite", "https://cdn.invalid/nke-node-ubuntu-22.04-amd64.qcow2", "no NKE apt suite is known for Ubuntu 22.04"},
+		{"a release with no suite", "https://cdn.invalid/nke-node-ubuntu-22.04-amd64.qcow2", "no NVKE apt suite is known for Ubuntu 22.04"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inputs := completeForgeInputs()

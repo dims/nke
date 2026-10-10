@@ -145,7 +145,7 @@ fi
 
 AUDIENCE="${NKE_AUDIENCE:-$(cwe_discover_audience)}"
 if [[ -z "${AUDIENCE}" ]]; then
-  die "NKE is authenticating (AUTH_CONFIG_PATH=${auth_config_path}) but no audience could be read
+  die "NVKE is authenticating (AUTH_CONFIG_PATH=${auth_config_path}) but no audience could be read
   from configmap ${NKE_CONTROLLER_NAMESPACE}/nke-auth-config. Set NKE_AUDIENCE to override."
 fi
 

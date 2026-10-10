@@ -94,7 +94,7 @@ func Render(templatePath string, vars Vars) (string, error) {
 // option Signed-By", so only add ours when it is absent.
 func AptProvision(repoURL, gpgURL, suite, component, deb, debVersion string) string {
 	return "  - bash -c 'if grep -Rqs \"" + suite + "\" /etc/apt/sources.list.d/ /etc/apt/sources.list; then" +
-		" echo \"NKE apt repo already present in image; using it\"; else" +
+		" echo \"NVKE apt repo already present in image; using it\"; else" +
 		" install -d -m 0755 /etc/apt/keyrings && curl -fsSL \"" + gpgURL + "\" |" +
 		" gpg --dearmor -o /etc/apt/keyrings/nke.gpg &&" +
 		" echo \"deb [signed-by=/etc/apt/keyrings/nke.gpg] " + repoURL + " " + suite + " " + component + "\"" +

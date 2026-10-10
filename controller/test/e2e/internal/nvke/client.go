@@ -65,7 +65,7 @@ func NewClient(ctx context.Context, restConfig *rest.Config, opts Options) (*Cli
 
 	source, found, err := authtoken.Discover(ctx, restConfig)
 	if err != nil {
-		return nil, fmt.Errorf("discovering the NKE API credential: %w", err)
+		return nil, fmt.Errorf("discovering the NVKE API credential: %w", err)
 	}
 	// A typed nil in an interface is not a nil interface, so the no-credential
 	// case leaves tokens unassigned.
@@ -82,7 +82,7 @@ func NewClient(ctx context.Context, restConfig *rest.Config, opts Options) (*Cli
 func NewClientWithTokenSource(restConfig *rest.Config, opts Options, tokens TokenSource) (*Client, error) {
 	forwarder, err := kube.SharedServiceForwarder(restConfig, controller.Namespace(), controller.Service(), controller.Port())
 	if err != nil {
-		return nil, fmt.Errorf("building NKE port-forward: %w", err)
+		return nil, fmt.Errorf("building NVKE port-forward: %w", err)
 	}
 
 	clientOpts := []api.ClientOption{api.WithHTTPClient(forwarder.HTTPClient())}

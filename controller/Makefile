@@ -257,7 +257,7 @@ E2E_TIMEOUT ?= 2h
 ARGS ?=
 
 .PHONY: test-e2e
-test-e2e: ## Run all NKE e2e tests; optional ARGS forwards ginkgo flags Example: make test-e2e ARGS='--label-filter="nico-vms && happy-path"'
+test-e2e: ## Run all NVKE e2e tests; optional ARGS forwards ginkgo flags Example: make test-e2e ARGS='--label-filter="nico-vms && happy-path"'
 	cd $(E2E_DIR) && go run github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION) run -v --timeout=$(E2E_TIMEOUT) $(ARGS) .
 
 .PHONY: test-e2e-core-capd test-e2e-core-nico-containers test-e2e-happy-path

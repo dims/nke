@@ -128,7 +128,7 @@ on:
         type: string
         required: false
       os-image-amd64:
-        description: Overrides the HTTPS URL of the amd64 NKE qcow2 the plan resolves.
+        description: Overrides the HTTPS URL of the amd64 NVKE qcow2 the plan resolves.
         type: string
         required: false
       os-image-bootloader-arm64:
@@ -136,7 +136,7 @@ on:
         type: string
         required: false
       os-image-arm64:
-        description: Overrides the HTTPS URL of the arm64 NKE qcow2 the plan resolves.
+        description: Overrides the HTTPS URL of the arm64 NVKE qcow2 the plan resolves.
         type: string
         required: false
       dry-run:

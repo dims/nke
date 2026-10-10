@@ -341,7 +341,7 @@ func (c *Controller) applyRBAC(ctx context.Context, cluster db.Cluster, adminCon
 		return fmt.Errorf("building tenant client for cluster %s: %w", cluster.Name, err)
 	}
 	if err := applyManifestSSA(ctx, tenantClient, manifest, rbacFieldManager); err != nil {
-		return fmt.Errorf("applying NKE RBAC to cluster %s: %w", cluster.Name, err)
+		return fmt.Errorf("applying NVKE RBAC to cluster %s: %w", cluster.Name, err)
 	}
 
 	return nil

@@ -31,7 +31,7 @@ import (
 // afterwards, so it runs in the same lane as the enforcing specs rather than
 // needing a cluster of its own. Ordered, because that flip is container-wide
 // setup rather than per-spec.
-var _ = Describe("NKE API authentication in permissive mode", Ordered, Label("authn-permissive"), func() {
+var _ = Describe("NVKE API authentication in permissive mode", Ordered, Label("authn-permissive"), func() {
 	var (
 		restConfig *rest.Config
 		clientset  kubernetes.Interface

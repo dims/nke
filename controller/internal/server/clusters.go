@@ -132,7 +132,7 @@ func (s *clusterService) pinFleetOIDCProviders(cluster *db.Cluster) {
 	}
 	providers := s.fleetOIDC.Providers
 	if len(providers) > 0 && !kubeadmconfig.SupportsAuthenticationConfiguration(cluster.KubernetesVersion) {
-		s.logger.Warn("Creating cluster without the fleet-wide OIDC providers: its Kubernetes version cannot read the AuthenticationConfiguration NKE renders",
+		s.logger.Warn("Creating cluster without the fleet-wide OIDC providers: its Kubernetes version cannot read the AuthenticationConfiguration NVKE renders",
 			"cluster", cluster.Name, "kubernetesVersion", cluster.KubernetesVersion, "providers", len(providers))
 		providers = nil
 	}

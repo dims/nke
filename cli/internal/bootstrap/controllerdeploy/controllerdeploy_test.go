@@ -827,8 +827,8 @@ func TestSpireAndCWEAgreeOnTheClassName(t *testing.T) {
 	const cweClassNameDefault = "spire-mgmt-spire"
 
 	if spireControllerManagerClass != cweClassNameDefault {
-		t.Errorf("the class is %q, but the NKE controller's SPIRE_CLASS_NAME defaults to %q; "+
-			"the NKE controller would write ClusterStaticEntry objects the controller manager ignores",
+		t.Errorf("the class is %q, but the NVKE controller's SPIRE_CLASS_NAME defaults to %q; "+
+			"the NVKE controller would write ClusterStaticEntry objects the controller manager ignores",
 			spireControllerManagerClass, cweClassNameDefault)
 	}
 
