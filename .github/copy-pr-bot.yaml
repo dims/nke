@@ -6,7 +6,7 @@ auto_sync_draft: true
 auto_sync_ready: true
 
 # Contributors whose pull requests the bot mirrors without a vetter's
-# `/ok to test`: the nke-admin, nke-maintainer and nke-write rosters as of
+# `/ok to test`: the nvke-admin, nvke-maintainer and nvke-write rosters as of
 # 2026-09-12, including members whose dsx-ai-factory invitation is pending.
 additional_trustees:
   - abhay-krishna
