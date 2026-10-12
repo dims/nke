@@ -194,32 +194,36 @@ e2e_wait_for_zero_tenant_clusters() {
 }
 
 # Runs node image $1's ovs-vswitchd check on the Docker kernel. ARC's runner
-# cannot load modules itself, and its installed module files are not in DinD's
-# filesystem. If the daemon cannot load the module, stream the runner's matching
-# module tree into a privileged helper instead. Never invoke ovs-ctl: its fallback
-# removes the bridge module and destroys the Docker networks (#1515).
+# cannot load modules itself, and DinD's /lib/modules may lack the module. Then
+# load this kernel's own Ubuntu build of it in a privileged helper: a module from
+# any other build fails with "Invalid argument". Never invoke ovs-ctl: its
+# fallback removes the bridge module and destroys the Docker networks (#1515).
 e2e_host_loads_openvswitch() (
   set -o pipefail
-  local image="$1" kernel
+  local image="$1" series
   if docker run --rm --privileged -v /lib/modules:/lib/modules:ro --entrypoint /bin/sh "${image}" \
     -c 'test -e /sys/module/openvswitch || exec modprobe openvswitch'; then
     return 0
   fi
 
-  kernel="$(uname -r)" || return 1
-  if [[ "$(uname -s)" != Linux || ! -d "/lib/modules/${kernel}" ]]; then
-    echo "openvswitch is unavailable to Docker and no matching local module tree exists" >&2
-    return 1
-  fi
-  echo "loading openvswitch through privileged Docker with the runner's ${kernel} module files" >&2
-  tar -C /lib/modules -cf - "${kernel}" |
-    docker run --rm --privileged -i --entrypoint /bin/sh "${image}" -c '
-      set -eu
-      mkdir -p /lib/modules
-      tar -C /lib/modules -xf -
-      modprobe openvswitch
-      test -e /sys/module/openvswitch
-    '
+  [[ "$(uname -s)" == Linux ]] || return 1
+  # The release that built this kernel: "#54~22.04.1-Ubuntu" is a 22.04 build.
+  series="$(uname -v | sed -n 's/^#[0-9]*~\([0-9][0-9]\.[0-9][0-9]\)\..*/\1/p')"
+  [[ -n "${series}" ]] || series="$(sed -n 's/^VERSION_ID="\(.*\)"$/\1/p' /etc/os-release)"
+  echo "loading openvswitch from Ubuntu ${series}'s $(uname -r) module packages" >&2
+  docker run --rm --privileged --entrypoint /bin/sh "$(dockerhub_image "ubuntu:${series}")" -c '
+    set -eu
+    k="$(uname -r)"
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends kmod >/dev/null
+    cd /tmp
+    apt-get download -qq "linux-modules-${k}" "linux-modules-extra-${k}"
+    for deb in ./*.deb; do dpkg -x "${deb}" /tmp/root; done
+    [ -d /tmp/root/lib/modules ] || ln -s usr/lib /tmp/root/lib
+    depmod -b /tmp/root "${k}"
+    modprobe -d /tmp/root -S "${k}" openvswitch
+    test -e /sys/module/openvswitch
+  '
 )
 
 # Per-node evidence: console, unit status, and the journals of the units a
