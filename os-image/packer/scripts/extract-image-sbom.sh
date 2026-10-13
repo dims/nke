@@ -68,11 +68,28 @@ ensure_appliance_kernel() {
 
   if [[ -z "${found}" ]]; then
     echo "No kernel in /boot for the libguestfs appliance; installing one..."
-    # -virtual, not -generic: this kernel is never booted, it is only read to
-    # build the appliance, so the smaller image is the right one.
-    sudo apt-get install -y -qq linux-image-virtual
+    install_appliance_kernel
     ensure_appliance_kernel
   fi
+}
+
+# -virtual, not -generic: this kernel is never booted, it is only read to
+# build the appliance, so the smaller image is the right one. Any version will
+# do, so when the newest one does not resolve (the archive publishes a kernel
+# in pieces, and the index can lead its dependencies for hours) try the other
+# versions the index offers, newest first, with apt's full output kept.
+install_appliance_kernel() {
+  local version
+  if sudo apt-get install -y -qq linux-image-virtual; then
+    return 0
+  fi
+  echo "linux-image-virtual did not resolve; trying the other versions the index offers" >&2
+  for version in $(apt-cache madison linux-image-virtual | awk '{ print $3 }' | sort -uV | tac); do
+    if sudo apt-get install -y "linux-image-virtual=${version}"; then
+      return 0
+    fi
+  done
+  return 1
 }
 ensure_appliance_kernel
 
