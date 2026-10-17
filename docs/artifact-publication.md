@@ -107,8 +107,14 @@ artifacts on GHCR. Unset, it means
 `root,controller,cli,agent,cluster-api-provider-provisioned,nktp`, so every
 component but `os-image`, whose qcow2s go to NVCR and S3 only. Set it to `none`
 to stop every GitHub publication, or list the components you want. NVCR, S3 and
-CloudFront are not affected. Neither are the `sha-` tagged artifacts on GHCR,
-which the NVCR and S3 publishers and the NICo VMs lane read as a hand-off.
+CloudFront are not affected, and neither is the CI hand-off on GHCR: the `sha-`
+and `edge` aliases of `agent` and `cli` and the `sha-` tagged qcow2s of
+`os-image` keep flowing, because `agent/Makefile`, the NVCR and S3 publishers
+and the NICo VMs lane read them. Only the version-tagged aliases, the GitHub
+Releases and their attestations stop. The variable must be a repository or
+organization variable; an environment variable is not visible to the job
+conditions. With `os-image` off, each leg's SBOM, checksums file and the
+checker binary are published to S3 beside the disk instead.
 
 Set it under the repository's Settings, Actions, Variables, or with
 `gh variable set NVKE_GITHUB_PUBLISH --body 'controller,cli'`. An empty value
@@ -205,8 +211,11 @@ Every release attaches a `checksums.txt` and a `checksums.txt.sigstore.json`
 beside it. The checksums file binds every artifact by SHA-256; the bundle is a
 [build-provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
 over that file. Verifying the attestation and then running `sha256sum -c`
-covers everything the release ships, including the four `os-image` qcow2s that
-are distributed as OCI artifacts rather than attached.
+covers everything the release ships, including the `os-image` qcow2s that
+are distributed as OCI artifacts rather than attached. An `os-image` release
+exists only when `NVKE_GITHUB_PUBLISH` names `os-image`; otherwise each leg's
+`checksums-<arch>[-ubuntu24.04]-<variant>.txt` sits on S3 beside its disk,
+without an attestation.
 
 A checksums file on its own proves a download arrived intact. It does not prove
 who produced it: whoever can replace the archive can replace the checksums file
@@ -268,7 +277,7 @@ what a build of this commit ought to select.
 |---|---|---|---|
 | `nvkectl-<os>-<arch>` | `nvkectl-<os>-<arch>.spdx.json` | Go modules, from the binary's embedded build info | GitHub Release asset |
 | `nvke-agent_<version>_<arch>.deb` | `nvke-agent_<version>_<arch>.spdx.json` | Go modules, from the binary inside the package | GitHub Release asset |
-| `nvke-node-{fde,non-fde}-ubuntu-<rel>-<arch>.qcow2` | `nvke-node-…-<arch>.spdx.json` | dpkg packages, from the image's own package database | GitHub Release asset |
+| `nvke-node-{fde,non-fde}-ubuntu-<rel>-<arch>.qcow2` | `nvke-node-…-<arch>.spdx.json` | dpkg packages, from the image's own package database | S3, beside the disk; a GitHub Release asset too when `NVKE_GITHUB_PUBLISH` names `os-image` |
 | `nke-controller` image | `controller-sbom-linux-<arch>.spdx.json` | image contents, scanned from the pushed image | workflow artifact on the **Image NVCR** run |
 | `cluster-api-provider-provisioned` image | `cluster-api-provider-provisioned-sbom-linux-<arch>.spdx.json` | image contents, scanned from the pushed image | workflow artifact on the **Image Provisioned NVCR** run |
 
@@ -338,7 +347,7 @@ the artifact was built by some GitHub workflow somewhere. Use
 | Artifact | Attested subject | Where the attestation lives |
 |---|---|---|
 | Release assets (`nvkectl`, agent `.deb`s, `nvke-os-image-check`, the NKTP chart archive) | `checksums.txt`, which names each by digest | GitHub, plus the attached bundle |
-| `os-image` qcow2 OCI artifacts | the same `checksums.txt` | GitHub, plus the attached bundle |
+| `os-image` qcow2 OCI artifacts | the same `checksums.txt` | GitHub, plus the attached bundle, when `NVKE_GITHUB_PUBLISH` names `os-image`; otherwise unattested |
 | `nke-controller`, `cluster-api-provider-provisioned` on GHCR | the multi-arch index digest | attached to the image in GHCR as an OCI referrer |
 | the same two images on NVCR | the same index digest | GitHub's attestation store only |
 

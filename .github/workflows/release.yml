@@ -60,7 +60,6 @@ jobs:
       component_dir: ${{ steps.component.outputs.dir }}
       dist_artifact: cli-dist-${{ github.run_id }}-${{ github.run_attempt }}
       beta: ${{ steps.component.outputs.beta }}
-      github_publish: ${{ steps.policy.outputs.github }}
     if: ${{ !startsWith(github.ref_name, 'agent/') && !startsWith(github.ref_name, 'os-image/') && !startsWith(github.ref_name, 'nktp/') && !startsWith(github.ref_name, 'cluster-api-provider-provisioned/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -139,14 +138,17 @@ jobs:
         env:
           COMPONENT: ${{ steps.component.outputs.dir || 'root' }}
           PUBLISH: ${{ vars.NVKE_GITHUB_PUBLISH || 'root,controller,cli,agent,cluster-api-provider-provisioned,nktp' }}
+          # The same contains() every other publisher uses, so case and
+          # spacing behave the same everywhere.
+          GITHUB_PUBLISH: ${{ contains(format(',{0},', vars.NVKE_GITHUB_PUBLISH || 'root,controller,cli,agent,cluster-api-provider-provisioned,nktp'), format(',{0},', steps.component.outputs.dir || 'root')) }}
         run: |
           set -euo pipefail
-          github=false
-          if [[ ",${PUBLISH}," == *",${COMPONENT},"* ]]; then
-            github=true
+          echo "github=${GITHUB_PUBLISH}" >> "${GITHUB_OUTPUT}"
+          if [[ "${GITHUB_PUBLISH}" == "true" ]]; then
+            echo "GitHub publishing for '${COMPONENT}' is on (NVKE_GITHUB_PUBLISH='${PUBLISH}')"
+          else
+            echo "::notice::GitHub publishing for '${COMPONENT}' is off (NVKE_GITHUB_PUBLISH='${PUBLISH}'): no GitHub Release for ${GITHUB_REF_NAME}"
           fi
-          echo "github=${github}" >> "${GITHUB_OUTPUT}"
-          echo "GitHub publishing for '${COMPONENT}': ${github} (NVKE_GITHUB_PUBLISH='${PUBLISH}')"
 
       # go.work, not cli/go.mod, like every other workflow here. setup-go pins
       # GOTOOLCHAIN=local, so the toolchain must satisfy the workspace, which
@@ -310,7 +312,7 @@ jobs:
       # RELEASE.md, "Verifying a release".
       - name: Attest the release checksums
         id: attest
-        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true'
+        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/checksums.txt
@@ -320,7 +322,7 @@ jobs:
       # the API. Added after the count above, which verify-release-assets
       # treats as a minimum -- an extra asset is fine, a missing one is not.
       - name: Attach the attestation bundle
-        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true'
+        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
         shell: bash
         env:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
@@ -378,7 +380,7 @@ jobs:
       # match the three sibling repositories, whose release jobs run on a
       # self-hosted runner where gh may not be installed.
       - name: Verify the release assets
-        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
+        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true' && steps.policy.outputs.github == 'true'
         uses: ./.github/actions/verify-release-assets
         with:
           release-id: ${{ steps.release.outputs.id }}
@@ -416,7 +418,7 @@ jobs:
   # here fixes both: one build, and everything behind the gate.
   cli-ghcr:
     needs: [release]
-    if: ${{ needs.release.outputs.component_dir == 'cli' && needs.release.outputs.github_publish == 'true' }}
+    if: ${{ needs.release.outputs.component_dir == 'cli' }}
     uses: ./.github/workflows/cli-artifact.yml
     permissions:
       contents: read
@@ -483,8 +485,8 @@ jobs:
 
             os-image/v*)
               echo "OS-image tag ${GITHUB_REF_NAME}:"
-              echo "  - qcow2  → OS Image Artifact (Packer + boot-smoke, then ghcr.io/dsx-ai-factory/nvke/os-image)"
-              echo "  - check  → nvke-os-image-check attached to the GitHub Release"
+              echo "  - qcow2  → OS Image Artifact (Packer + boot-smoke, then NVCR and S3; GHCR version tags only when NVKE_GITHUB_PUBLISH names os-image)"
+              echo "  - check  → nvke-os-image-check on S3 and, when NVKE_GITHUB_PUBLISH names os-image, on the GitHub Release"
               ;;
 
             nktp/v*)
