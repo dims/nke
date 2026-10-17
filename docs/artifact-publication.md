@@ -95,9 +95,20 @@ themselves, after they have built and verified the real artifacts:
 | Tag | Workflow | What ships |
 |---|---|---|
 | `agent/vX.Y.Z` | `agent-deb-publish.yml` (+ `agent-artifact.yml`) | `.deb`s, GitHub Release assets, GHCR binary, NVCR binary + `.deb`, S3/CloudFront `.deb` |
-| `os-image/vX.Y.Z` | `os-image-artifact.yml` | qcow2 on GHCR, NVCR, and S3/CloudFront; `nvke-os-image-check` on the GitHub Release |
+| `os-image/vX.Y.Z` | `os-image-artifact.yml` | qcow2 on NVCR and S3/CloudFront; on GHCR, with `nvke-os-image-check` on the GitHub Release, only when `NVKE_GITHUB_PUBLISH` names `os-image` |
 | `nktp/vX.Y.Z` | `nktp-chart-publish.yml` | Helm chart on GHCR and the GitHub Release |
 | `cli/vX.Y.Z` | `release.yml` (+ `cli-artifact.yml`, `cli-artifact-nvcr.yml`, `cli-s3-publish.yml`) | binaries on GitHub Release, GHCR, NVCR, S3/CloudFront |
+
+### Switching GitHub publishing off
+
+The Actions variable `NVKE_GITHUB_PUBLISH` lists the components whose releases
+go to GitHub: the GitHub Release record and assets, and the release-tagged
+artifacts on GHCR. Unset, it means
+`root,controller,cli,agent,cluster-api-provider-provisioned,nktp`, so every
+component but `os-image`, whose qcow2s go to NVCR and S3 only. Set it to `none`
+to stop every GitHub publication, or list the components you want. NVCR, S3 and
+CloudFront are not affected. Neither are the `sha-` tagged artifacts on GHCR,
+which the NVCR and S3 publishers and the NICo VMs lane read as a hand-off.
 
 An `os-image/` tag that fails Packer or the boot-smoke test never publishes the
 OCI artifact and never promotes the GitHub Release out of draft.
@@ -166,8 +177,9 @@ body from `CHANGELOG.md`. Nothing is created by hand.
 
 After the tag push, confirm that any CI release pipelines complete
 successfully (node OS-image bake, chart publish, etc.). For `os-image/v*`, that is
-the **OS Image Artifact** check: Packer, boot-smoke, then `oras` to
-`ghcr.io/dsx-ai-factory/nvke/os-image`. For `controller/v*`, confirm the **Image
+the **OS Image Artifact** check: Packer, boot-smoke, then the NVCR and S3
+publishers (GHCR and the GitHub Release only when `NVKE_GITHUB_PUBLISH` names
+`os-image`). For `controller/v*`, confirm the **Image
 NVCR** and **Chart Publish** checks, then that the promoted image is present at
 `ghcr.io/dsx-ai-factory/nvke/nke-controller:<version>`. For `nktp/v*`, confirm the
 **NKTP Chart Publish** check.

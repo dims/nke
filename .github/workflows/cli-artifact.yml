@@ -37,7 +37,11 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository_id == '1323115536'
+    # NVKE_GITHUB_PUBLISH names the components whose releases go to GitHub;
+    # see docs/artifact-publication.md. Unset means every component but os-image.
+    if: >-
+      github.repository_id == '1323115536' &&
+      contains(format(',{0},', vars.NVKE_GITHUB_PUBLISH || 'root,controller,cli,agent,cluster-api-provider-provisioned,nktp'), ',cli,')
     name: Publish binaries
     runs-on: ubuntu-latest
     timeout-minutes: 20

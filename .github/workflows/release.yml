@@ -60,6 +60,7 @@ jobs:
       component_dir: ${{ steps.component.outputs.dir }}
       dist_artifact: cli-dist-${{ github.run_id }}-${{ github.run_attempt }}
       beta: ${{ steps.component.outputs.beta }}
+      github_publish: ${{ steps.policy.outputs.github }}
     if: ${{ !startsWith(github.ref_name, 'agent/') && !startsWith(github.ref_name, 'os-image/') && !startsWith(github.ref_name, 'nktp/') && !startsWith(github.ref_name, 'cluster-api-provider-provisioned/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -129,6 +130,23 @@ jobs:
             echo "version=${VERSION}"
           } >> "${GITHUB_OUTPUT}"
           echo "Releasing ${TAG}: module='${DIR:-<repository>}' version=${VERSION}"
+
+      # NVKE_GITHUB_PUBLISH names the components whose releases go to GitHub;
+      # see docs/artifact-publication.md. Unset means every component but os-image.
+      - name: Decide whether GitHub gets this release
+        id: policy
+        shell: bash
+        env:
+          COMPONENT: ${{ steps.component.outputs.dir || 'root' }}
+          PUBLISH: ${{ vars.NVKE_GITHUB_PUBLISH || 'root,controller,cli,agent,cluster-api-provider-provisioned,nktp' }}
+        run: |
+          set -euo pipefail
+          github=false
+          if [[ ",${PUBLISH}," == *",${COMPONENT},"* ]]; then
+            github=true
+          fi
+          echo "github=${github}" >> "${GITHUB_OUTPUT}"
+          echo "GitHub publishing for '${COMPONENT}': ${github} (NVKE_GITHUB_PUBLISH='${PUBLISH}')"
 
       # go.work, not cli/go.mod, like every other workflow here. setup-go pins
       # GOTOOLCHAIN=local, so the toolchain must satisfy the workspace, which
@@ -340,7 +358,7 @@ jobs:
       # Do not remove that step.
       - name: Create GitHub release
         id: release
-        if: steps.component.outputs.beta != 'true'
+        if: steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           # A bare tag releases the product, so its title says so; a module
@@ -360,7 +378,7 @@ jobs:
       # match the three sibling repositories, whose release jobs run on a
       # self-hosted runner where gh may not be installed.
       - name: Verify the release assets
-        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true'
+        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
         uses: ./.github/actions/verify-release-assets
         with:
           release-id: ${{ steps.release.outputs.id }}
@@ -371,7 +389,7 @@ jobs:
       # Only after the step above, which fails the job and leaves the draft
       # in place rather than publishing something it could not verify.
       - name: Publish the release
-        if: steps.component.outputs.beta != 'true'
+        if: steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASE_ID: ${{ steps.release.outputs.id }}
@@ -398,7 +416,7 @@ jobs:
   # here fixes both: one build, and everything behind the gate.
   cli-ghcr:
     needs: [release]
-    if: ${{ needs.release.outputs.component_dir == 'cli' }}
+    if: ${{ needs.release.outputs.component_dir == 'cli' && needs.release.outputs.github_publish == 'true' }}
     uses: ./.github/workflows/cli-artifact.yml
     permissions:
       contents: read

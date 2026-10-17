@@ -66,7 +66,11 @@ env:
 
 jobs:
   publish:
-    if: github.repository_id == '1323115536'
+    # NVKE_GITHUB_PUBLISH names the components whose releases go to GitHub;
+    # see docs/artifact-publication.md. Unset means every component but os-image.
+    if: >-
+      github.repository_id == '1323115536' &&
+      contains(format(',{0},', vars.NVKE_GITHUB_PUBLISH || 'root,controller,cli,agent,cluster-api-provider-provisioned,nktp'), ',agent,')
     name: Publish binaries
     # Both architectures are produced by cross-compilation from one runner:
     # the agent is pure Go with CGO disabled, so this needs no arm64 runner and
