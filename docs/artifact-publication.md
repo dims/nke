@@ -110,6 +110,21 @@ to stop every GitHub publication, or list the components you want. NVCR, S3 and
 CloudFront are not affected. Neither are the `sha-` tagged artifacts on GHCR,
 which the NVCR and S3 publishers and the NICo VMs lane read as a hand-off.
 
+Set it under the repository's Settings, Actions, Variables, or with
+`gh variable set NVKE_GITHUB_PUBLISH --body 'controller,cli'`. An empty value
+counts as unset and gives the default list; only `none` means nothing. The
+names, comma-separated with no spaces:
+
+| Name | Tag | What GitHub gets when the name is listed |
+|---|---|---|
+| `root` | bare `vX.Y.Z` | the GitHub Release with the product manifest and SBOM |
+| `controller` | `controller/v*` | the GitHub Release, `nke-controller` image and chart on GHCR |
+| `cli` | `cli/v*` | the GitHub Release with the binaries, `cli` binaries on GHCR |
+| `agent` | `agent/v*` | the GitHub Release with the `.deb`s, `agent` and `agent-deb` on GHCR |
+| `cluster-api-provider-provisioned` | `cluster-api-provider-provisioned/v*` | the provider image on GHCR |
+| `nktp` | `nktp/v*` | the GitHub Release and the chart on GHCR |
+| `os-image` | `os-image/v*` | the GitHub Release and the version-tagged qcow2s on GHCR |
+
 An `os-image/` tag that fails Packer or the boot-smoke test never publishes the
 OCI artifact and never promotes the GitHub Release out of draft.
 
