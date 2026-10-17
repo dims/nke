@@ -380,7 +380,7 @@ jobs:
       # match the three sibling repositories, whose release jobs run on a
       # self-hosted runner where gh may not be installed.
       - name: Verify the release assets
-        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true' && steps.policy.outputs.github == 'true'
+        if: steps.artifacts.outputs.has_files == 'true' && steps.component.outputs.beta != 'true' && steps.policy.outputs.github == 'true'
         uses: ./.github/actions/verify-release-assets
         with:
           release-id: ${{ steps.release.outputs.id }}

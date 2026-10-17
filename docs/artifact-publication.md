@@ -201,7 +201,8 @@ successfully (node OS-image bake, chart publish, etc.). For `os-image/v*`, that 
 the **OS Image Artifact** check: Packer, boot-smoke, then the NVCR and S3
 publishers (GHCR and the GitHub Release only when `NVKE_GITHUB_PUBLISH` names
 `os-image`). For `controller/v*`, confirm the **Image
-NVCR** and **Chart Publish** checks, then that the promoted image is present at
+NVCR** check, and, when `NVKE_GITHUB_PUBLISH` names `controller`, the **Chart
+Publish** check and the promoted image at
 `ghcr.io/dsx-ai-factory/nvke/nke-controller:<version>`. For `nktp/v*`, confirm the
 **NKTP Chart Publish** check.
 
