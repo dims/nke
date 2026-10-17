@@ -153,6 +153,7 @@ throttle() {
 }
 
 # gh api with three attempts on a 5xx or a rate limit; other errors fail at once.
+# A secondary rate limit asks for at least a minute before the next request.
 api() {
 	local attempt
 	for attempt in 1 2 3; do
@@ -160,6 +161,7 @@ api() {
 			return 0
 		fi
 		if grep -q -E 'HTTP 429|rate limit' "$out/.api.err"; then
+			sleep 60
 			throttle
 		elif ! grep -q -E 'HTTP 5[0-9][0-9]' "$out/.api.err"; then
 			cat "$out/.api.err" >&2
@@ -332,9 +334,9 @@ if [ ! -s "$plan" ]; then
 	echo "nothing to delete"
 	exit 0
 fi
-# A classic token lists its scopes in a header; a fine-grained token has none
-# and is checked by the first DELETE instead.
-scopes="$(gh api -i user 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1) == "x-oauth-scopes" { print $2 }')"
+# A classic token lists its scopes in a header; a fine-grained token has none,
+# and a failed probe leaves the check to the first DELETE instead.
+scopes="$(gh api -i user 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1) == "x-oauth-scopes" { print $2 }' || true)"
 if [ -n "$scopes" ] && $scope_packages && ! grep -q -F -- 'delete:packages' <<<"$scopes"; then
 	echo "the token lacks delete:packages (has: $scopes); run: gh auth refresh -s delete:packages" >&2
 	exit 1
