@@ -76,7 +76,10 @@ jobs:
   build:
     if: github.repository_id == '1323115536'
     name: Build (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    # Both legs build on the amd64 pool: the Dockerfile cross-compiles and QEMU
+    # runs the few arm64 steps, so the arm64 leg no longer waits hours behind
+    # the e2e legs that share arc-arm64-cpu16.
+    runs-on: linux-amd64-cpu16
     environment: nvcr
     timeout-minutes: 30
     permissions:
@@ -85,11 +88,6 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
-        include:
-          - arch: amd64
-            runner: linux-amd64-cpu16
-          - arch: arm64
-            runner: arc-arm64-cpu16
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,6 +112,11 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           buildkitd-config: ${{ steps.buildkit.outputs.config }}
+
+      # QEMU runs the arm64 leg's apk steps on the amd64 runner; the Go build
+      # is a native cross-compile (the Dockerfile's builder stage).
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       # `$oauthtoken` is NGC's literal username, not a variable reference.
       - name: Log in to NVCR

@@ -19,8 +19,10 @@ ARG ALPINE_IMAGE=docker.io/alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676
 
 FROM ghcr.io/spiffe/k8s-spiffe-workload-jwt-exec-auth:1.0.0@sha256:e30e90774e5951f84eb6dfb36f972fead08b64c3bfdc0912c5b15f988e79de3a AS spiffe-jwt-exec-auth
 
-# Set up golang build container
-FROM ${GOLANG_IMAGE} AS builder
+# The builder runs on the build host's architecture and cross-compiles for
+# TARGETARCH below, so an arm64 image needs neither an arm64 runner nor an
+# emulated Go compile.
+FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} AS builder
 ENV GOPROXY=https://proxy.golang.org|direct
 ARG TARGETOS
 ARG TARGETARCH
