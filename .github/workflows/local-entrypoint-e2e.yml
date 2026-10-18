@@ -26,6 +26,9 @@ on:
     paths:
       - controller/hack/local-backend-e2e.sh
       - controller/hack/backend-e2e-lib.sh
+      # The entrypoint compiles and runs this suite, so a spec change changes
+      # what the lane proves; without it a suite-only change never started it.
+      - controller/test/e2e/**
       # The entrypoint builds the node image, so this lane owns changes to it.
       - controller/hack/capd-kindest-node/**
       # It reaches the node image, the management cluster and the bundle mirror
