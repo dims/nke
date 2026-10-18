@@ -288,8 +288,9 @@ request is sent.
 Scaling is asynchronous: the command returns once the controller has recorded the change,
 and the management plane provisions or tears down nodes to match it. A rejected
 scale-up, such as one the cluster's pod CIDR has no room for, is reported with
-the controller's own message. There is no confirmation prompt, so a lower count starts
-removing nodes straight away.
+the controller's own message. There is no confirmation prompt. A lower count removes
+only pending nodes that provisioning has not started; running nodes stay until you
+delete them.
 
 
 ### 14. Delete a node pool

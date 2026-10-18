@@ -107,7 +107,7 @@ kubectl get deployment nke-controller -n nke-controller -o jsonpath='{.spec.temp
 
 ### The bootstrap fails at clusterctl init
 
-- **Symptom:** The bootstrap fails with `cwedeploy: clusterctl init:` and `clusterctl dev must be on PATH`, and `nvkectl version` prints `dev`.
+- **Symptom:** The bootstrap fails with `controllerdeploy: clusterctl init:` and `clusterctl dev must be on PATH`, and `nvkectl version` prints `dev`.
 - **Cause:** `nvkectl` was built with `go build`. Only the Makefile stamps the version and the Cluster API version into the binary.
 - **Fix:** Build with `make -C nvke/cli build`. If the message names a real version, `clusterctl` is missing from `PATH` or the host cannot reach `github.com`.
 

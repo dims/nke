@@ -447,7 +447,7 @@ A non-empty list requires `cluster.k8sVersion` `1.34.0` or newer and contains at
 | `issuerURL` | yes | Issuer URL. An `https` URL, unique in the list. The API server compares it with the token's `iss` claim. |
 | `audiences` | yes | `aud` values the API server accepts. At least one, and none empty. |
 | `usernameClaim` | yes | Claim the API server uses as the username. |
-| `usernamePrefix` | yes | Text the API server puts in front of the username. It must not start with `system:`, `kubeadm:`, `nvke:`, or `nvidia:`. |
+| `usernamePrefix` | yes | Text the API server puts in front of the username. It must not start with `system:`, `kubeadm:`, `nke:`, `nvke:`, or `nvidia:`. |
 | `groupsClaim` | no | Claim the API server uses as the user's groups. |
 | `groupsPrefix` | no | Text the API server puts in front of each group. The reserved prefixes are the same as for `usernamePrefix`. |
 | `requiredClaims` | no | Map of claim name to the value that claim must hold. |

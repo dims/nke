@@ -389,8 +389,8 @@ a warning.
 | `issuers[].algorithms` | yes | `RS256` and `ES256` cover most issuers. Asymmetric only. |
 | `issuers[].admit` | yes | One of `serviceAccounts`, `spiffe`, or `groups`. |
 
-The file is read once at startup. The chart restarts NVKE when the config
-changes; if yours does not, restart it yourself:
+The file is read once at startup. A change to the config does not restart
+NVKE, so restart it yourself:
 
 ```bash
 kubectl -n "$NS" rollout restart deploy/nke-controller
