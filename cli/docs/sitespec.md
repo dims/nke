@@ -8,7 +8,7 @@ The command loads the file, applies defaults, and validates every field before
 it dispatches any work. Any invalid or missing field fails fast with a clear
 error and no node is touched.
 
-A ready-to-copy example is in [`examples/sitespec.yaml`](../examples/sitespec.yaml).
+A ready-to-copy example is in [`examples/sitespec.yaml`](https://github.com/dsx-ai-factory/nvke/blob/main/cli/examples/sitespec.yaml).
 
 ## Generating one
 
@@ -65,7 +65,7 @@ the cluster on them. Setting `infra.provider: nico` swaps that list for
 `infra.nico`: CAPNICo allocates the same number of control-plane machines from
 a NICo site, with the instance types, network, SSH key groups and release the
 block names. Everything else in the
-file means what it did. [`examples/sitespec-nico.yaml`](../examples/sitespec-nico.yaml)
+file means what it did. [`examples/sitespec-nico.yaml`](https://github.com/dsx-ai-factory/nvke/blob/main/cli/examples/sitespec-nico.yaml)
 is a complete example.
 
 **This NICo is for bootstrap only.** It is the NICo that allocates the site
@@ -87,7 +87,7 @@ you delete the cluster with
 until then. After a failure before every control-plane node joined, release the
 NICo instances CAPNICo allocated before you delete the cluster, as the failure
 message and
-[the retained bootstrap cluster](bootstrap-troubleshooting.md#release-the-nico-instances-first)
+[the retained bootstrap cluster](https://github.com/dsx-ai-factory/nvke/blob/main/cli/docs/bootstrap-troubleshooting.md#release-the-nico-instances-first)
 describe: deleting the Kind cluster alone leaves them allocated and unmanaged.
 After every control-plane node joined the site cluster is working and its NICo
 machines belong to it, so release nothing: recover the kubeconfig and key, then
@@ -289,8 +289,8 @@ The controller stack install reads the site spec too, and changes nothing
 in it: the site name, the control-plane VIP and the SPIRE trust domain are
 the bootstrap's facts the stack must agree with. Everything only the stack
 needs lives in a separate file, the stack config, which starts from
-[`deploy/examples/stack-config.json`](../../deploy/examples/stack-config.json);
-[deploy/README.md](../../deploy/README.md) lists its keys. The credentials
+[`deploy/examples/stack-config.json`](https://github.com/dsx-ai-factory/nvke/blob/main/deploy/examples/stack-config.json);
+[deploy/README.md](https://github.com/dsx-ai-factory/nvke/blob/main/deploy/README.md) lists its keys. The credentials
 come from the environment (see "Credential handling"), and the nodes'
 architecture is in neither file: the install reads it from the cluster.
 

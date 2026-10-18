@@ -4,7 +4,7 @@ How to make NVKE require a token on its API, using an identity provider you
 already run.
 
 This is the operator's side. For getting a token and making a call once it is
-on, see [Authenticating to the NVKE API](authenticating-to-the-api.md).
+on, see [Call the API](../../docs/operate/api-authentication.md#call-the-api) in Secure the NVKE API.
 
 ## What you are setting up
 
@@ -474,4 +474,4 @@ kubectl -n "$NS" get deploy nke-controller \
 
 ## See also
 
-- [Authenticating to the NVKE API](authenticating-to-the-api.md): the caller's side, including `nvkectl`.
+- [Secure the NVKE API](../../docs/operate/api-authentication.md): the operator path, and the caller's side including `nvkectl`.

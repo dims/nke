@@ -89,7 +89,7 @@ plus:
 Nothing else. The deploy path creates the `nktp` namespace with the
 `privileged` Pod Security level the node Collector needs, and every setting a
 management cluster needs is in
-[`nktp/values.yaml`](../../../deploy/nico/nktp/values.yaml).
+[`nktp/values.yaml`](https://github.com/dsx-ai-factory/nvke/blob/main/deploy/nico/nktp/values.yaml).
 
 ## Install order
 
