@@ -82,8 +82,7 @@ gateway_logs:
         readOnly: true
 ```
 
-> [!NOTE]
-> `fsGroup: 10001` matches the group used by NKTP's default Collector image. It
+> **Note:** `fsGroup: 10001` matches the group used by NKTP's default Collector image. It
 > lets the non-root Collector read the root-owned Secret files through the group
 > read bit in `0440`. If you use a custom Collector image, set `fsGroup` to a
 > group available to that image. Alternatively, omit both `defaultMode` and
