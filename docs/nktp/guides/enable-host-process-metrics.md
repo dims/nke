@@ -14,7 +14,7 @@ privilege, mount, and mute option in this guide.
 ## Enable the scraper
 
 The node Collector already mounts the host's `/proc` at `/hostfs/proc`. Add the
-receiver and its own pipeline to the metrics gateway:
+receiver and its own pipeline to the node Collector:
 
 ```yaml
 daemonset:
