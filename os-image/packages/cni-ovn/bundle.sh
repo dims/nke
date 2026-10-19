@@ -96,6 +96,13 @@ grep -qx "version: ${VERSION}" "${chart_src}/Chart.yaml" ||
   die "${REPO} ${COMMIT} is not chart version ${VERSION}"
 dockerfile="${src}/dist/images/Dockerfile.ubuntu.nv"
 [[ -f "$dockerfile" ]] || die "${REPO} ${COMMIT} has no dist/images/Dockerfile.ubuntu.nv"
+# The recipe pins its Go builder on docker.io with no ARG, so route that pull through
+# CNI_DOCKERHUB_MIRROR like the base image; the ARC runners hit Docker Hub's 429 otherwise.
+go_builder="$(grep -oE '^FROM golang:[^ ]+' "$dockerfile" | head -1)" ||
+  die "${REPO} ${COMMIT} dist/images/Dockerfile.ubuntu.nv has no 'FROM golang:' builder line"
+sed "s|^${go_builder} |FROM $(image_transport_ref "docker.io/library/${go_builder#FROM }") |" "$dockerfile" \
+  >"${WORK}/Dockerfile.ubuntu.nv"
+dockerfile="${WORK}/Dockerfile.ubuntu.nv"
 
 mkdir -p "${STAGE}/charts"
 cp -R "$chart_src" "${STAGE}/charts/ovn-kubernetes"
