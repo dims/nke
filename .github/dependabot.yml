@@ -93,6 +93,10 @@ updates:
       # still updates the group PR. Nothing here requires cel-go directly.
       - dependency-name: "github.com/google/cel-go"
 
+      # Its upstream v2.4.0-pr tag resolves as a +incompatible root module without
+      # the sdk/standard submodule, so every grouped bump fails to resolve. Bump by hand.
+      - dependency-name: "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
+
   # Dockerfiles anywhere in the tree (controller/, controller/hack/*, agent/, ...).
   #
   # This only reaches an image named on a FROM. Two forms in this tree are
