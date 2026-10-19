@@ -327,6 +327,9 @@ e2e_collect_node_diagnostics() {
       -u nvke-agent -u spire-agent -u swtpm-local -u containerd -u kubelet \
       -u ovsdb-server -u ovs-vswitchd -u nke-container-network -u nke-container-cni-images \
       >"${out_dir}/${node_name}-journal.txt" 2>&1
+    # The cni-images postinst logs ctr's own error there; the journal has only the exit code.
+    docker exec "${node_name}" sh -c 'cat /var/log/nke-cni-*-postinst.log' \
+      >"${out_dir}/${node_name}-cni-postinst.log" 2>&1
   done < <(docker ps -a --filter "ancestor=${node_image}" --format '{{.Names}}')
 }
 
