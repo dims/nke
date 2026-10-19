@@ -257,6 +257,24 @@ class OSImageWorkflowTest(unittest.TestCase):
                         step,
                     )
 
+    def test_publish_jobs_pull_the_digest_their_build_leg_pushed(self):
+        # The sha- alias is mutable: a second bake of the same commit moved it
+        # under a tag run's publish jobs, which then failed their own checksums.
+        push = self.step("- name: Push the qcow2 to GHCR", "- name: Show published manifest")
+        self.assertIn("--format 'go-template={{.digest}}'", push)
+        self.assertIn('echo "digest=${digest}" >> "${GITHUB_OUTPUT}"', push)
+        prepare = self.step("- name: Prepare release assets", "- name: Upload release assets")
+        self.assertIn('> "assets/digest-${BUILD}.txt"', prepare)
+        for start, end in (
+            ("- name: Copy GHCR to NVCR", "\n  publish-s3:"),
+            ("- name: Resolve release and pull the qcow2", "- name: Verify the pulled qcow2s"),
+        ):
+            with self.subTest(step=start):
+                step = self.step(start, end)
+                self.assertIn('@$(< "expected/digest-${BUILD}.txt")', step)
+                for alias in (":sha-${GITHUB_SHA}", ":${SHA_ALIAS}"):
+                    self.assertNotIn(alias, step)
+
     def test_pushed_beta_tag_publishes_to_the_prod_bucket(self):
         # Qualification reads a beta from the prod CDN. Losing the beta clause
         # sends it to non-prod, which qualification sees only as a 403.
